@@ -1,0 +1,21 @@
+@import "tailwindcss/theme.css";
+@import "tailwindcss/utilities.css";
+
+@theme {
+  --font-sans: "DM Sans", Arial, sans-serif;
+  --font-display: "Space Grotesk", Arial, sans-serif;
+  --color-medical-blue: #0056B3;
+  --color-medical-teal: #0D9488;
+  --color-healing-green: #10B981;
+  --color-clinical-ink: #374151;
+}
+
+@utility clinical-antialias {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+@utility clinical-focus {
+  outline: 3px solid color-mix(in srgb, var(--color-healing-green) 72%, transparent);
+  outline-offset: 4px;
+}

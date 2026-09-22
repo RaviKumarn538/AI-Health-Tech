@@ -1,0 +1,462 @@
+<% layout('/layouts/boilerplate') -%>
+
+<% 
+  const verifiedRecords = (medicalRecords || []).filter((record) => record.doctorVerified);
+  const prescriptions = verifiedRecords.flatMap((record) => (record.extractedData?.medications || []).map((medication) => ({ ...medication, source: record.title, date: record.createdAt, version: record.version })));
+  const docs = documents || [];
+%>
+
+<div class="patient-profile-container" data-patient-id="<%= patient._id %>">
+  <!-- Patient Profile Header Card -->
+  <header class="patient-profile-header">
+    <div class="patient-main-info">
+      <div class="patient-avatar-box">
+        <span class="avatar-initials"><%= (patient.fullName || 'Patient').split(/\s+/).filter(Boolean).map((n) => n[0]).join('').slice(0, 2) %></span>
+      </div>
+      <div class="patient-title-group">
+        <div class="patient-title-row">
+          <h1 class="patient-name"><%= patient.fullName %></h1>
+          <span class="mrn-badge"><%= patient.mrn %></span>
+        </div>
+        <div class="patient-demographics">
+          <span><%= patient.age || '—' %> yrs</span>
+          <span class="bullet-sep">·</span>
+          <span><%= patient.gender || 'Not specified' %></span>
+          <span class="bullet-sep">·</span>
+          <span>Blood: <%= patient.bloodGroup || 'Not typed' %></span>
+          <% if (patient.phone) { %>
+            <span class="bullet-sep">·</span>
+            <span>Tel: <%= patient.phone %></span>
+          <% } %>
+        </div>
+      </div>
+    </div>
+
+    <!-- Contextual Ask AI Button & Stats -->
+    <div class="patient-header-actions">
+      <button type="button" class="btn btn-ask-ai" id="btnOpenAskAiDrawer">
+        <span class="ai-sparkle-icon">✦</span>
+        <span>Ask Clinical Assistant</span>
+      </button>
+      <a href="/upload?patient=<%= patient._id %>" class="btn btn-primary">
+        <span class="btn-icon">+</span>
+        <span>Add Document</span>
+      </a>
+    </div>
+  </header>
+
+  <!-- Clinical Safety Alert Strip (Allergies & Conditions) -->
+  <section class="patient-safety-strip" aria-label="Clinical Alerts">
+    <div class="safety-item <%= patient.allergies ? 'safety-alert' : '' %>">
+      <span class="safety-label">Documented Allergies:</span>
+      <strong class="safety-val"><%= patient.allergies || 'None documented' %></strong>
+    </div>
+    <div class="safety-item">
+      <span class="safety-label">Chronic Conditions:</span>
+      <strong class="safety-val"><%= patient.chronicConditions || 'None documented' %></strong>
+    </div>
+    <div class="safety-item">
+      <span class="safety-label">Verified Records:</span>
+      <strong class="safety-val"><%= verifiedRecords.length %> sealed</strong>
+    </div>
+  </section>
+
+  <!-- Navigation Tabs: [ Overview ] [ Clinical Records ] [ Documents ] [ AI Conversations ] [ Audit ] -->
+  <nav class="patient-tab-nav" role="tablist" aria-label="Patient Profile Tabs">
+    <button type="button" class="tab-btn is-active" data-tab-target="tab-overview" role="tab" aria-selected="true">
+      Overview
+    </button>
+    <button type="button" class="tab-btn" data-tab-target="tab-prescriptions" role="tab" aria-selected="false">
+      Prescriptions (<%= prescriptions.length %>)
+    </button>
+    <button type="button" class="tab-btn" data-tab-target="tab-records" role="tab" aria-selected="false">
+      Medical History (<%= verifiedRecords.length %>)
+    </button>
+    <button type="button" class="tab-btn" data-tab-target="tab-documents" role="tab" aria-selected="false">
+      Documents (<%= docs.length %>)
+    </button>
+    <button type="button" class="tab-btn" data-tab-target="tab-conversations" role="tab" aria-selected="false">
+      Assistant History (<%= (conversations || []).length %>)
+    </button>
+    <button type="button" class="tab-btn" data-tab-target="tab-audit" role="tab" aria-selected="false">
+      Audit Trail
+    </button>
+  </nav>
+
+  <!-- Tab Content Containers -->
+  <div class="patient-tab-panels">
+
+    <!-- ========================================== -->
+    <!-- TAB 1: OVERVIEW -->
+    <!-- ========================================== -->
+    <div class="tab-panel is-active" id="tab-overview" role="tabpanel">
+      <!-- Active Prescriptions Summary -->
+      <section class="panel-section-card">
+        <div class="section-header-row">
+          <div>
+            <h2 class="card-heading">Active Prescriptions & Regimen</h2>
+            <p class="card-sub">Verified medications extracted from clinical records</p>
+          </div>
+          <span class="badge badge-success"><%= prescriptions.length %> verified medications</span>
+        </div>
+
+        <div class="table-responsive">
+          <table class="clinical-table">
+            <thead>
+              <tr>
+                <th scope="col">Medication</th>
+                <th scope="col">Dosage</th>
+                <th scope="col">Frequency</th>
+                <th scope="col">Instructions</th>
+                <th scope="col">Record Source</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (!prescriptions.length) { %>
+                <tr>
+                  <td colspan="5" class="table-empty">No verified prescriptions documented yet.</td>
+                </tr>
+              <% } else { %>
+                <% prescriptions.forEach((rx) => { %>
+                  <tr>
+                    <td><strong><%= rx.name %></strong></td>
+                    <td><span class="dose-tag"><%= rx.dosage || '—' %></span></td>
+                    <td><%= rx.frequency || '—' %></td>
+                    <td class="text-muted"><%= rx.instructions || 'As directed' %></td>
+                    <td><span class="source-tag"><%= rx.source %></span></td>
+                  </tr>
+                <% }) %>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Clinical Trends & Labs -->
+      <% if (trends && Object.keys(trends).length > 0) { %>
+        <section class="panel-section-card">
+          <div class="section-header-row">
+            <div>
+              <h2 class="card-heading">Longitudinal Laboratory Signals</h2>
+              <p class="card-sub">Trends across verified investigation reports</p>
+            </div>
+          </div>
+          <div class="trends-summary-grid">
+            <% Object.entries(trends).forEach(([key, values]) => { %>
+              <% const latest = values[values.length - 1]; %>
+              <div class="trend-summary-box">
+                <div class="trend-box-top">
+                  <strong class="trend-test-name"><%= latest.testName %></strong>
+                  <span class="trend-status-pill <%= latest.status === 'ABNORMAL' ? 'badge-amber' : 'badge-success' %>">
+                    <%= latest.status %>
+                  </span>
+                </div>
+                <div class="trend-val-row">
+                  <span class="trend-num"><%= latest.resultValue %></span>
+                  <span class="trend-unit"><%= latest.units %></span>
+                </div>
+                <div class="trend-meta-sub">Ref: <%= latest.referenceRange || 'Standard' %> · <%= formatDate(latest.recordedAt) %></div>
+              </div>
+            <% }) %>
+          </div>
+        </section>
+      <% } %>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- TAB 2: PRESCRIPTIONS -->
+    <!-- ========================================== -->
+    <div class="tab-panel" id="tab-prescriptions" role="tabpanel" style="display: none;">
+      <section class="panel-section-card">
+        <div class="section-header-row">
+          <div>
+            <h2 class="card-heading">Verified Prescriptions</h2>
+            <p class="card-sub">Only clinician-approved medication entries are shown here.</p>
+          </div>
+          <span class="badge badge-success"><%= prescriptions.length %> entries</span>
+        </div>
+        <div class="table-responsive">
+          <table class="clinical-table">
+            <thead><tr><th>Medication</th><th>Dosage</th><th>Frequency</th><th>Instructions</th><th>Source</th></tr></thead>
+            <tbody>
+              <% if (!prescriptions.length) { %>
+                <tr><td colspan="5" class="table-empty">No clinician-approved prescriptions documented yet.</td></tr>
+              <% } else { %>
+                <% prescriptions.forEach((rx) => { %>
+                  <tr>
+                    <td><strong><%= rx.name || 'Unresolved medication' %></strong></td>
+                    <td><%= rx.dosage || '—' %></td>
+                    <td><%= rx.frequency || '—' %></td>
+                    <td><%= rx.instructions || '—' %></td>
+                    <td><%= rx.source %> · <%= formatDate(rx.date) %></td>
+                  </tr>
+                <% }) %>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- TAB 3: MEDICAL HISTORY (TIMELINE & VERSIONS) -->
+    <!-- ========================================== -->
+    <div class="tab-panel" id="tab-records" role="tabpanel" style="display: none;">
+      <section class="panel-section-card">
+        <div class="section-header-row">
+          <div>
+            <h2 class="card-heading">Longitudinal Clinical Records</h2>
+            <p class="card-sub">Sealed clinical records with complete version amendment history</p>
+          </div>
+        </div>
+
+        <div class="clinical-timeline-wrapper">
+          <% if (!verifiedRecords.length) { %>
+            <div class="empty-state-box">
+              <span class="empty-icon">🗂</span>
+              <h3>No verified clinical records</h3>
+              <p>Upload a clinical document and approve the extraction to establish the record.</p>
+            </div>
+          <% } else { %>
+            <% verifiedRecords.forEach((rec, idx) => { %>
+              <div class="timeline-record-card <%= rec.version > 1 ? 'is-amended-version' : '' %>">
+                <div class="timeline-card-left">
+                  <span class="timeline-circle"><%= rec.version > 1 ? '⟳' : '✓' %></span>
+                  <div class="timeline-line"></div>
+                </div>
+
+                <div class="timeline-card-content">
+                  <div class="timeline-top-row">
+                    <div class="timeline-title-block">
+                      <span class="record-type-pill"><%= prettyType(rec.recordType) %></span>
+                      <% if (rec.version > 1) { %>
+                        <span class="version-badge version-amended">Version <%= rec.version %> of <%= rec.version %></span>
+                      <% } else { %>
+                        <span class="version-badge version-original">v1.0</span>
+                      <% } %>
+                      <h3 class="record-node-title">
+                        <a href="/records/<%= rec._id %>"><%= rec.title %></a>
+                      </h3>
+                    </div>
+
+                    <div class="timeline-date-stamp">
+                      <time datetime="<%= safeIsoDate(rec.verifiedAt || rec.createdAt) %>">
+                        <%= formatDate(rec.verifiedAt || rec.createdAt, true) %>
+                      </time>
+                    </div>
+                  </div>
+
+                  <% if (rec.extractedData?.diagnosis) { %>
+                    <p class="record-diagnosis-line"><strong>Diagnosis:</strong> <%= rec.extractedData.diagnosis %></p>
+                  <% } %>
+
+                  <% if (rec.extractedData?.medications && rec.extractedData.medications.length) { %>
+                    <div class="record-meds-summary">
+                      <span class="label">Rx:</span>
+                      <%= rec.extractedData.medications.map((m) => m.name + (m.dosage ? ' ' + m.dosage : '')).join(', ') %>
+                    </div>
+                  <% } %>
+
+                  <% if (rec.amendmentReason) { %>
+                    <div class="timeline-amend-rationale">
+                      <span class="amend-tag">Amendment Rationale:</span>
+                      <em>"<%= rec.amendmentReason %>"</em>
+                    </div>
+                  <% } %>
+
+                  <div class="timeline-card-actions">
+                    <span class="verified-by-tag">Signed by <%= rec.verifiedByName || 'Clinician not recorded' %></span>
+                    <a href="/records/<%= rec._id %>" class="btn btn-secondary btn-sm">
+                      <span>View Full Record</span>
+                      <span class="arrow-glyph">→</span>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            <% }) %>
+          <% } %>
+        </div>
+      </section>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- TAB 3: DOCUMENTS -->
+    <!-- ========================================== -->
+    <div class="tab-panel" id="tab-documents" role="tabpanel" style="display: none;">
+      <section class="panel-section-card">
+        <div class="section-header-row">
+          <div>
+            <h2 class="card-heading">Ingested Clinical Documents</h2>
+            <p class="card-sub">Paper prescriptions, OPD cards, and lab sheets attached to this patient</p>
+          </div>
+          <a href="/upload?patient=<%= patient._id %>" class="btn btn-outline btn-sm">+ Upload New</a>
+        </div>
+
+        <div class="table-responsive">
+          <table class="clinical-table">
+            <thead>
+              <tr>
+                <th scope="col">Document</th>
+                <th scope="col">Type</th>
+                <th scope="col">Status</th>
+                <th scope="col">Uploaded</th>
+                <th scope="col" class="th-actions">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (!docs.length) { %>
+                <tr>
+                  <td colspan="5" class="table-empty">No documents uploaded for this patient.</td>
+                </tr>
+              <% } else { %>
+                <% docs.forEach((doc) => { %>
+                  <tr>
+                    <td>
+                      <div class="doc-title-cell">
+                        <span class="doc-icon">📄</span>
+                        <strong class="doc-name"><%= doc.originalFilename %></strong>
+                      </div>
+                    </td>
+                    <td><span class="doc-type-pill"><%= prettyType(doc.documentType) %></span></td>
+                    <td>
+                      <% if (isDocumentApproved(doc)) { %>
+                        <span class="badge badge-success"><span class="status-dot"></span> Verified</span>
+                      <% } else { %>
+                        <span class="badge badge-amber"><span class="status-dot"></span> Needs Review</span>
+                      <% } %>
+                    </td>
+                    <td><%= formatDate(doc.createdAt) %></td>
+                    <td class="td-actions">
+                      <a href="/review/<%= doc._id %>" class="btn btn-secondary btn-sm">
+                        <span>Workspace ↗</span>
+                      </a>
+                    </td>
+                  </tr>
+                <% }) %>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- TAB 4: AI CONVERSATIONS -->
+    <!-- ========================================== -->
+    <div class="tab-panel" id="tab-conversations" role="tabpanel" style="display: none;">
+      <section class="panel-section-card">
+        <div class="section-header-row">
+          <div>
+            <h2 class="card-heading">AI Conversation History</h2>
+            <p class="card-sub">Saved separately from authoritative medical records</p>
+          </div>
+          <a href="/assistant?patient=<%= patient._id %>" class="btn btn-outline btn-sm">Ask Clinical Assistant</a>
+        </div>
+        <div class="conversation-list">
+          <% if (!(conversations || []).length) { %>
+            <div class="empty-state-box">
+              <span class="empty-icon">✦</span>
+              <h3>No AI conversations yet</h3>
+              <p>Start a patient-specific conversation from the clinical assistant.</p>
+            </div>
+          <% } else { %>
+            <% conversations.forEach((conversation) => { %>
+              <div class="conversation-row surface">
+                <span class="assistant-icon">✦</span>
+                <span>
+                  <strong><%= conversation.title %></strong>
+                  <small><%= formatDate(conversation.updatedAt || conversation.createdAt, true) %> · <%= conversation.messageCount || 0 %> messages · <%= conversation.doctorName || 'Clinical team' %></small>
+                </span>
+                <b>Patient-scoped</b>
+                <span class="badge badge-success">Separate from chart</span>
+              </div>
+            <% }) %>
+          <% } %>
+        </div>
+      </section>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- TAB 5: AUDIT TRAIL -->
+    <!-- ========================================== -->
+    <div class="tab-panel" id="tab-audit" role="tabpanel" style="display: none;">
+      <section class="panel-section-card">
+        <div class="section-header-row">
+          <div>
+            <h2 class="card-heading">Patient Audit Events</h2>
+            <p class="card-sub">Access logs, verification timestamps, and amendment events for this patient</p>
+          </div>
+          <a href="/audit?search=<%= encodeURIComponent(patient.fullName) %>" class="card-action-link">Open Full Audit Trail →</a>
+        </div>
+
+        <div class="audit-events-list">
+          <% if (!(auditLogs || []).length) { %>
+            <div class="empty-state-box"><h3>No audit events recorded</h3><p>Verification and access events will appear here.</p></div>
+          <% } %>
+          <% (auditLogs || []).forEach((log) => { %>
+            <div class="audit-row">
+              <span class="audit-icon">🛡</span>
+              <div class="audit-details">
+                <strong><%= log.action %></strong>
+                <small><%= log.actorName || 'Clinician not recorded' %> · <%= formatDate(log.timestamp, true) %></small>
+              </div>
+              <span class="audit-badge <%= ['RECORD_APPROVED', 'DOCTOR_VERIFY', 'FIELD_VERIFIED'].includes(log.action) ? 'badge-success' : '' %>"><%= log.resourceType || 'ClinicalDocument' %></span>
+            </div>
+          <% }) %>
+        </div>
+      </section>
+    </div>
+
+  </div>
+</div>
+
+<!-- ======================================================== -->
+<!-- Slide-out Drawer: Contextual Ask AI (Grounded in Verified Records) -->
+<!-- ======================================================== -->
+<div class="ask-ai-drawer-backdrop" id="askAiBackdrop" style="display: none;"></div>
+<aside class="ask-ai-slideout-drawer" id="askAiDrawer" aria-label="Contextual Clinical AI Assistant" aria-hidden="true">
+  <div class="drawer-header">
+    <div class="drawer-title-group">
+      <div class="drawer-title-row">
+        <span class="ai-sparkle-glyph">✦</span>
+        <h3 class="drawer-title">Clinical Assistant: <%= patient.fullName %></h3>
+      </div>
+      <p class="drawer-grounding-note">
+        🔒 Grounded strictly in verified clinical records. Unreviewed drafts are excluded from answers.
+      </p>
+    </div>
+    <button type="button" class="btn-drawer-close" id="btnCloseAskAiDrawer" aria-label="Close assistant">×</button>
+  </div>
+
+  <div class="drawer-chat-body" id="drawerChatMessages">
+    <div class="chat-msg ai-msg">
+      <span class="chat-sender">Clinical Assistant</span>
+      <p>Hello clinician. I have indexed <%= verifiedRecords.length %> verified records for <%= patient.fullName %> (<%= patient.mrn %>). How can I assist you with this patient's history?</p>
+      <div class="suggested-prompts">
+        <button type="button" class="prompt-chip" data-prompt="Summarize active medications and allergies">Summarize active medications</button>
+        <button type="button" class="prompt-chip" data-prompt="What was the reason for the recent medication amendment?">Check recent amendment rationale</button>
+        <button type="button" class="prompt-chip" data-prompt="Are there any recent lab abnormalities?">Review recent abnormal labs</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="drawer-chat-footer">
+    <form id="drawerChatForm" class="drawer-input-form">
+      <input 
+        type="text" 
+        id="drawerChatInput" 
+        class="drawer-text-input" 
+        placeholder="Ask about medications, amendments, or history..."
+        autocomplete="off"
+        required
+      >
+      <button type="submit" class="btn btn-primary btn-send-chat" id="btnSendChat">
+        <span>Ask</span>
+        <span class="arrow-glyph">→</span>
+      </button>
+    </form>
+    <div class="drawer-disclaimer">
+      AI-generated clinical synthesis. Confirm clinical decisions against source records.
+    </div>
+  </div>
+</aside>

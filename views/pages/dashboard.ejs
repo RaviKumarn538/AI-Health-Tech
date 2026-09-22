@@ -1,0 +1,172 @@
+<% layout('/layouts/boilerplate') -%>
+
+<div class="dashboard-container">
+  <!-- Top Greeting & Action Header -->
+  <header class="dashboard-header">
+    <div class="header-intro">
+      <h2 class="clinician-greeting"><%= clinicianGreeting.startsWith('Dr.') ? `Good morning, ${clinicianGreeting}` : `Good morning, Dr. ${clinicianGreeting}` %></h2>
+      <p class="header-subtext">You have <strong><%= Number(stats.needsReview) === 1 ? '1 document' : `${stats.needsReview} documents` %></strong> awaiting clinical verification today.</p>
+    </div>
+    <div class="header-actions">
+      <a class="btn btn-primary btn-upload-entry" href="/upload">
+        <span class="btn-icon" aria-hidden="true">+</span>
+        <span>Upload Record</span>
+      </a>
+    </div>
+  </header>
+
+  <!-- 3 Clear Metric Cards -->
+  <section class="metric-summary-strip" aria-label="Clinical Metrics">
+    <div class="stat-card">
+      <span class="stat-label">Patients</span>
+      <strong class="stat-value"><%= stats.patients %></strong>
+      <span class="stat-meta">Active patient records</span>
+    </div>
+
+    <div class="stat-card">
+      <span class="stat-label">Today's docs</span>
+      <strong class="stat-value"><%= stats.todayDocs %></strong>
+      <span class="stat-meta">Digitized today</span>
+    </div>
+
+    <div class="stat-card stat-card-alert">
+      <span class="stat-label">Needs review</span>
+      <strong class="stat-value"><%= stats.needsReview %></strong>
+      <span class="stat-meta">Awaiting clinician sign-off</span>
+    </div>
+  </section>
+
+  <!-- Main Workflow Area: Pending Queue & Recent Records -->
+  <div class="dashboard-main-grid">
+    <!-- Pending Verification Queue (Priority Ordered) -->
+    <section class="dashboard-card pending-queue-card" id="pending-section" aria-labelledby="queueHeading">
+      <div class="card-header-row">
+        <div>
+          <h2 id="queueHeading" class="card-title">Pending Verification Queue</h2>
+          <p class="card-subtitle">Prioritized by fields requiring clinical scrutiny before EHR sync</p>
+        </div>
+        <span class="badge badge-amber"><%= pendingQueue.length %> pending</span>
+      </div>
+
+      <div class="pending-queue-list">
+        <% if (!pendingQueue.length) { %>
+          <div class="empty-state-box">
+            <span class="empty-icon">✓</span>
+            <h3>All clinical documents verified</h3>
+            <p>No documents currently require clinician review. Upload a document to begin.</p>
+          </div>
+        <% } else { %>
+          <% pendingQueue.forEach((item, index) => { %>
+            <div class="queue-item-card <%= item.totalNeedReview > 0 ? 'needs-attention' : 'ready-status' %>">
+              <div class="queue-item-left">
+                <span class="queue-priority-num"><%= index + 1 %></span>
+                <div class="queue-item-details">
+                  <div class="queue-patient-line">
+                    <strong class="queue-patient-name"><%= toTitleCase(item.patient?.fullName) || 'Unknown Patient' %></strong>
+                    <span class="patient-mrn-pill"><%= item.patient?.mrn || 'Unassigned' %></span>
+                    <span class="doc-type-pill"><%= prettyType(item.documentType) %></span>
+                  </div>
+                  <div class="queue-meta-line">
+                    <span class="queue-file-name"><%= item.originalFilename %></span>
+                    <span class="bullet-sep">·</span>
+                    <span class="queue-time"><%= formatDate(item.createdAt) %></span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="queue-item-right">
+                <span class="review-status-chip <%= item.totalNeedReview > 0 ? 'chip-amber' : 'chip-green' %>">
+                  <span class="chip-dot"></span>
+                  <%= item.reviewStatusText %>
+                </span>
+                <a href="/review/<%= item._id %>" class="btn btn-secondary btn-sm queue-review-btn">
+                  <span>Review</span>
+                  <span class="arrow-glyph">→</span>
+                </a>
+              </div>
+            </div>
+          <% }) %>
+        <% } %>
+      </div>
+    </section>
+
+    <!-- Recent Clinical Records Table -->
+    <section class="dashboard-card recent-records-card" aria-labelledby="recordsHeading">
+      <div class="card-header-row">
+        <div>
+          <h2 id="recordsHeading" class="card-title">Recent Clinical Records</h2>
+          <p class="card-subtitle">Latest immutable digital records and version history</p>
+        </div>
+        <a href="/records" class="card-action-link">View all records →</a>
+      </div>
+
+      <div class="table-responsive">
+        <table class="clinical-table">
+          <thead>
+            <tr>
+              <th scope="col">Patient</th>
+              <th scope="col">Document</th>
+              <th scope="col">Status</th>
+              <th scope="col">Time</th>
+              <th scope="col" class="th-actions">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (!recentClinicalRecords || !recentClinicalRecords.length) { %>
+              <tr>
+                <td colspan="5" class="table-empty">No clinical records found.</td>
+              </tr>
+            <% } else { %>
+              <% recentClinicalRecords.forEach((rec) => { %>
+                <tr>
+                  <td>
+                    <div class="table-patient-cell">
+                      <strong class="cell-patient-name"><%= toTitleCase(rec.patientName) %></strong>
+                      <span class="cell-mrn"><%= rec.mrn %></span>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="table-doc-cell">
+                      <span class="cell-doc-title"><%= toTitleCase(String(rec.documentTitle || '').replace(/\.[^/.]+$/, '').replaceAll('_', ' ').replaceAll('-', ' ')) %></span>
+                      <span class="cell-doc-type"><%= prettyType(rec.documentType) %></span>
+                      <% if (rec.version && rec.version > 1) { %>
+                        <span class="version-pill">v<%= rec.version %></span>
+                      <% } %>
+                    </div>
+                  </td>
+                  <td>
+                    <% if (rec.status === 'Approved') { %>
+                      <span class="badge badge-success">
+                        <span class="status-dot"></span> Approved
+                      </span>
+                    <% } else if (rec.status === 'Needs Review') { %>
+                      <span class="badge badge-amber">
+                        <span class="status-dot"></span> Needs Review
+                      </span>
+                    <% } else { %>
+                      <span class="badge badge-slate">
+                        <span class="status-dot"></span> Processing
+                      </span>
+                    <% } %>
+                  </td>
+                  <td>
+                    <time class="table-time" datetime="<%= safeIsoDate(rec.time) %>"><%= formatDate(rec.time) %></time>
+                  </td>
+                  <td class="td-actions">
+                    <% if (rec.recordId) { %>
+                      <a href="/records/<%= rec.recordId %>" class="table-row-link" title="View record details">View record ↗</a>
+                    <% } else if (rec.documentId) { %>
+                      <a href="/review/<%= rec.documentId %>" class="table-row-link" title="Open verification workspace">Review ↗</a>
+                    <% } else { %>
+                      <a href="/records" class="table-row-link">View ↗</a>
+                    <% } %>
+                  </td>
+                </tr>
+              <% }) %>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</div>

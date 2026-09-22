@@ -1,0 +1,39 @@
+{
+  "name": "curaclinic-ai-documentation",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Multi-page AI-assisted clinical documentation and verification workstation",
+  "main": "app.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/material": "^9.4.0",
+    "@tailwindcss/cli": "^4.3.3",
+    "bootstrap": "^5.3.8",
+    "bulma": "^1.0.4",
+    "compression": "^1.8.1",
+    "connect-mongo": "^6.0.0",
+    "dotenv": "^17.4.2",
+    "ejs": "^5.0.2",
+    "ejs-mate": "^4.0.0",
+    "express": "^5.2.1",
+    "express-session": "^1.19.0",
+    "foundation-sites": "^6.9.0",
+    "google-auth-library": "^11.1.0",
+    "method-override": "^3.0.0",
+    "mongoose": "^9.3.3",
+    "multer": "^2.1.1",
+    "nodemon": "^3.1.14",
+    "tailwindcss": "^4.3.3"
+  },
+  "scripts": {
+    "css:build": "node node_modules/@tailwindcss/cli/dist/index.mjs -i public/css/tailwind.input.css -o public/css/tailwind.css --minify",
+    "start": "npm run css:build && node app.js",
+    "dev": "npm run css:build && nodemon app.js",
+    "test": "node scripts/verify.js && node scripts/test_dsa_extraction.js && node scripts/test_ai_extraction.js && node scripts/test_ai_manual_mode.js && node scripts/test_cloudinary_storage.js"
+  }
+}

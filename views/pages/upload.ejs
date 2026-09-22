@@ -1,0 +1,141 @@
+<% layout('/layouts/boilerplate') -%>
+
+<div class="upload-page-container">
+  <header class="page-title-block">
+    <div class="title-breadcrumbs">
+      <a href="/dashboard">Dashboard</a>
+      <span class="sep">/</span>
+      <span class="current">Upload Clinical Document</span>
+    </div>
+    <h1 class="page-heading">Upload Clinical Document</h1>
+    <p class="page-lead">Convert paper prescriptions, OPD cards, case sheets, and discharge summaries into structured, clinician-verified digital records.</p>
+  </header>
+
+  <div class="upload-workspace-card">
+    <form method="post" action="/documents/upload" enctype="multipart/form-data" class="upload-form" id="clinicalUploadForm">
+      
+      <!-- Document Type Selection Pills -->
+      <div class="doc-type-selector-section">
+        <label class="section-subheading">Select Document Type</label>
+        <div class="doc-type-pills-group" role="radiogroup" aria-label="Document Type Selection">
+          <label class="doc-pill">
+            <input type="radio" name="documentType" value="PRESCRIPTION" checked>
+            <span class="pill-badge">Prescription</span>
+          </label>
+          <label class="doc-pill">
+            <input type="radio" name="documentType" value="OPD_CARD">
+            <span class="pill-badge">OPD Card</span>
+          </label>
+          <label class="doc-pill">
+            <input type="radio" name="documentType" value="CASE_SHEET">
+            <span class="pill-badge">Case Sheet</span>
+          </label>
+          <label class="doc-pill">
+            <input type="radio" name="documentType" value="DISCHARGE_SUMMARY">
+            <span class="pill-badge">Discharge Summary</span>
+          </label>
+          <label class="doc-pill">
+            <input type="radio" name="documentType" value="INVESTIGATION_NOTE">
+            <span class="pill-badge">Investigation Note</span>
+          </label>
+          <label class="doc-pill">
+            <input type="radio" name="documentType" value="LAB_REPORT">
+            <span class="pill-badge">Lab Report</span>
+          </label>
+          <label class="doc-pill">
+            <input type="radio" name="documentType" value="OTHER">
+            <span class="pill-badge">Other</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Patient Selection Field -->
+      <div class="patient-assign-row">
+        <label for="patientSelect" class="form-label">Assign to Patient <span class="text-muted">(optional; can be confirmed after extraction)</span></label>
+        <div class="select-wrapper">
+          <select name="patientId" id="patientSelect" class="form-select">
+            <option value="" <%= !selectedPatientId ? 'selected' : '' %>>Leave unassigned — match after extraction</option>
+            <% (patients || []).forEach((patient) => { %>
+            <option value="<%= patient._id %>" <%= (typeof selectedPatientId !== 'undefined' && String(patient._id) === String(selectedPatientId || '')) ? 'selected' : '' %>><%= patient.fullName %> · <%= patient.mrn %> (<%= patient.age || '—' %>y, <%= patient.gender || 'N/A' %>)</option>
+            <% }) %>
+          </select>
+        </div>
+      </div>
+
+      <!-- Drag & Drop Box -->
+      <div class="dropzone-area" id="clinicalDropzone">
+        <input type="file" name="file" id="clinicalFileInput" accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/png,image/jpeg,image/webp" class="file-input-hidden" aria-required="true">
+        <div class="dropzone-inner" id="dropzoneContent">
+          <div class="dropzone-icon-circle">
+            <span class="icon-upload-arrow">📄</span>
+          </div>
+          <h3 class="dropzone-prompt">Drag & drop clinical document here</h3>
+          <p class="dropzone-sub">or <button type="button" class="btn-browse-trigger" id="browseTrigger">browse files</button> from your computer</p>
+          <div class="dropzone-formats">Supports PDF, PNG, JPG, JPEG, WEBP (up to 15 MB)</div>
+        </div>
+
+        <!-- Selected File Preview Bar -->
+        <div class="selected-file-banner" id="selectedFileBanner" style="display: none;">
+          <span class="file-icon">📎</span>
+          <div class="file-meta">
+            <strong class="file-name" id="selectedFileName">filename.png</strong>
+            <span class="file-size" id="selectedFileSize">1.2 MB</span>
+          </div>
+          <button type="button" class="btn-remove-file" id="removeFileBtn" aria-label="Remove selected file">×</button>
+        </div>
+      </div>
+
+      <p class="upload-client-error" id="uploadClientError" role="alert" aria-live="polite" hidden></p>
+
+      <!-- Privacy & Compliance Note -->
+      <div class="privacy-compliance-box">
+        <span class="shield-icon" aria-hidden="true">🔒</span>
+        <div class="privacy-text">
+          <strong>Private clinical document handling</strong>
+          <p>Files stay outside the public web directory, and AI output remains a reviewable draft until a clinician verifies it.</p>
+        </div>
+      </div>
+
+      <!-- Submit Action -->
+      <div class="upload-submit-row">
+        <a href="/dashboard" class="btn btn-outline">Cancel</a>
+        <button type="submit" class="btn btn-primary btn-submit-upload" id="submitUploadBtn">
+          <span>Start Clinical Extraction</span>
+          <span class="arrow-glyph">→</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Stepped Processing Progress Overlay -->
+<div class="processing-overlay-modal" id="processingOverlay" style="display: none;" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="processingTitle">
+  <div class="processing-card">
+    <div class="processing-spinner-ring"></div>
+    <h2 id="processingTitle" class="processing-title">Processing Clinical Document</h2>
+    <p class="processing-lead">Analyzing handwriting, layout, and medical entities...</p>
+
+    <div class="processing-steps-list">
+      <div class="proc-step" id="step-1">
+        <span class="step-indicator">○</span>
+        <span class="step-label">Uploading document...</span>
+      </div>
+      <div class="proc-step" id="step-2">
+        <span class="step-indicator">○</span>
+        <span class="step-label">Detecting document type...</span>
+      </div>
+      <div class="proc-step" id="step-3">
+        <span class="step-indicator">○</span>
+        <span class="step-label">Extracting clinical entities...</span>
+      </div>
+      <div class="proc-step" id="step-4">
+        <span class="step-indicator">○</span>
+        <span class="step-label">Flagging confidence levels...</span>
+      </div>
+      <div class="proc-step" id="step-5">
+        <span class="step-indicator">○</span>
+        <span class="step-label">Ready for review</span>
+      </div>
+    </div>
+  </div>
+</div>

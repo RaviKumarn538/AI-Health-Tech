@@ -1,0 +1,1062 @@
+<% layout('/layouts/boilerplate') -%>
+
+<% 
+  const displayValue = (input, fallback = '') => {
+    let value = input;
+    while (value && typeof value === 'object' && Object.prototype.hasOwnProperty.call(value, 'value')) {
+      value = value.value;
+    }
+    if (value === null || value === undefined || value === '') return fallback;
+    if (typeof value === 'object') {
+      try { return JSON.stringify(value); } catch (_) { return fallback; }
+    }
+    return String(value);
+  };
+  const sourceBoundingBoxJson = (source) => {
+    const box = source?.boundingBox;
+    if (!Array.isArray(box) || box.length !== 4 || box.some((value) => !Number.isFinite(Number(value)))) return '';
+    const [ymin, xmin, ymax, xmax] = box.map(Number);
+    if (ymin < 0 || xmin < 0 || ymax > 100 || xmax > 100 || ymax <= ymin || xmax <= xmin) return '';
+    return JSON.stringify([ymin, xmin, ymax, xmax]);
+  };
+  const isVerified = isDocumentApproved(document);
+  const flags = document.extractedRecord?.clinicalFlags || {};
+  const meds = document.medications || [];
+  const labs = document.labResults || [];
+  const patient = document.patient || {};
+  const structured = extraction?.structuredData || document.extractedRecord?.structuredJson || {};
+  const extPatient = structured.patient || {};
+  const extEncounter = structured.encounter || {};
+  const extDiagnosis = Array.isArray(structured.diagnosis) ? structured.diagnosis : [];
+  const extMedications = (Array.isArray(structured.medications) && structured.medications.length) 
+    ? structured.medications 
+    : meds.map((m, idx) => ({
+        name: { value: m.name, confidence: m.confidence || 0.91, status: m.isVerified ? 'clinician_verified' : ((m.confidence || 0) < 0.7 ? 'review_required' : 'ai_extracted'), source: m.sourceRegion },
+        dosage: { value: m.dosage, confidence: m.confidence || 0.90, status: 'ai_extracted' },
+        frequency: { value: m.frequency, confidence: m.confidence || 0.92, status: 'ai_extracted' },
+        route: { value: m.route || '', confidence: m.confidence || 0, status: 'ai_extracted' },
+        duration: { value: m.duration || '', confidence: m.confidence || 0, status: 'ai_extracted' },
+        instructions: { value: m.instructions, confidence: 0.88, status: 'ai_extracted' },
+        warning: m.warning || '',
+      }));
+  const extInvestigations = (Array.isArray(structured.investigations) && structured.investigations.length) 
+    ? structured.investigations 
+    : labs.map((l) => ({
+        testName: { value: l.testName, confidence: l.confidence || 0.95, status: 'ai_extracted', source: l.sourceRegion },
+        resultValue: { value: l.resultValue, confidence: l.confidence || 0.95, status: 'ai_extracted' },
+        units: { value: l.units, confidence: 0.90, status: 'ai_extracted' },
+        referenceRange: { value: l.referenceRange, confidence: 0.90, status: 'ai_extracted' },
+        abnormalFlag: l.status || 'NORMAL',
+        overallStatus: 'ai_extracted',
+      }));
+  const extObservations = Array.isArray(structured.observations) ? structured.observations : [];
+  const extFollowUp = structured.followUp || {};
+
+  const docPatientName = patient.fullName || displayValue(extPatient.name) || 'Unassigned Patient';
+  const docMrn = patient.mrn || displayValue(extPatient.mrn) || 'Pending MRN';
+  const candidateList = Array.isArray(candidates) ? candidates : [];
+  const patientOptions = Array.isArray(authorizedPatients) ? authorizedPatients : [];
+%>
+
+<div class="verification-workspace-container" data-doc-id="<%= document._id %>">
+  <!-- Top Workspace Context Header -->
+  <header class="workspace-header">
+    <div class="header-patient-meta">
+      <a href="/dashboard" class="header-back-btn" title="Back to Dashboard">←</a>
+      <div class="patient-id-block">
+        <h1 class="workspace-patient-name"><%= docPatientName %></h1>
+        <div class="workspace-meta-tags">
+          <span class="meta-tag type-tag"><%= prettyType(document.documentType) %></span>
+          <span class="meta-tag doc-tag">DOC-<%= String(document._id).slice(-5).toUpperCase() %></span>
+          <span class="meta-tag mrn-tag"><%= docMrn %></span>
+          <span class="meta-tag time-tag"><%= formatDate(document.createdAt) %></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="header-status-and-actions">
+      <div class="header-status-pill">
+        <% if (isVerified) { %>
+          <span class="status-badge badge-locked">
+            <span class="status-dot green"></span>
+            Clinician verified · <%= document.verifiedBy || 'Dr. Verified' %> · <%= formatDate(document.verifiedAt || document.updatedAt, true) %>
+          </span>
+        <% } else { %>
+          <span class="status-badge badge-pending">
+            <span class="status-dot amber"></span>
+            Needs verification · Human-in-the-loop review
+          </span>
+        <% } %>
+      </div>
+
+      <div class="header-action-buttons">
+        <% if (isVerified) { %>
+          <a href="/records/<%= document._id %>" class="btn btn-outline btn-sm">
+            <span>View Sealed Record ↗</span>
+          </a>
+        <% } %>
+      </div>
+    </div>
+  </header>
+
+  <!-- 3-Column Verification Workspace Layout -->
+  <div class="three-column-verification-layout">
+    
+    <!-- ========================================================= -->
+    <!-- COLUMN 1: Original Document Viewer -->
+    <!-- ========================================================= -->
+    <section class="workspace-zone zone-viewer" aria-label="Original Document Viewer">
+      <div class="zone-header">
+        <div class="zone-title-group">
+          <h2 class="zone-title">Original Document</h2>
+        </div>
+
+        <div class="viewer-controls" role="toolbar" aria-label="Document Viewer Controls">
+          <button type="button" class="ctrl-btn" id="btnZoomIn" title="Zoom In (+)">+</button>
+          <button type="button" class="ctrl-btn" id="btnZoomOut" title="Zoom Out (−)">−</button>
+          <button type="button" class="ctrl-btn ctrl-text-btn" id="btnZoomReset" title="Fit to Width">Fit Width</button>
+          <button type="button" class="ctrl-btn ctrl-text-btn" id="btnRotate" title="Rotate Document">⟳ Rotate</button>
+          <button type="button" class="ctrl-btn ctrl-toggle-btn is-active" id="btnToggleHighlights" title="Toggle Bounding Boxes">
+            <span class="toggle-dot"></span> Bounding Boxes
+          </button>
+        </div>
+      </div>
+
+      <!-- Interactive Canvas Stage for Pan & Zoom -->
+      <div class="viewer-viewport" id="viewerViewport">
+        <div class="viewer-stage" id="viewerStage">
+          <% if (document.sourceAvailable) { %>
+            <% if (document.sourcePreviewType === 'pdf') { %>
+              <iframe
+                src="/documents/<%= document._id %>/file"
+                title="Source clinical document: <%= document.originalFilename %>"
+                class="source-document-pdf"
+              ></iframe>
+            <% } else { %>
+              <img
+                src="/documents/<%= document._id %>/file"
+                alt="Source clinical document: <%= document.originalFilename %>"
+                id="sourceDocumentImage"
+                class="source-document-image"
+                loading="eager"
+              >
+            <% } %>
+          <% } %>
+          <div class="source-unavailable" id="sourceUnavailable" style="<%= document.sourceAvailable ? 'display:none;' : '' %>">
+            <strong>Original source unavailable</strong>
+            <p>The source file could not be located in private storage or cloud storage.</p>
+          </div>
+
+          <!-- Overlay Layer for Bounding Box Highlights -->
+          <div class="highlights-overlay-layer" id="highlightsOverlay">
+            <!-- Dynamic bounding boxes rendered via JS -->
+          </div>
+        </div>
+
+        <div class="viewer-watermark-indicator">
+          <span>Source: <%= document.originalFilename %></span>
+          <span class="file-size-info"><%= Math.round((document.fileSize || 34200) / 1024) %> KB</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Hairline divider -->
+    <div class="workspace-divider" aria-hidden="true"></div>
+
+    <!-- ========================================================= -->
+    <!-- COLUMN 2: AI Extracted Structured Data (All 7 Sections) -->
+    <!-- ========================================================= -->
+    <section class="workspace-zone zone-extracted" aria-label="AI Extracted Structured Data">
+      <div class="zone-header">
+        <div class="zone-title-group">
+          <h2 class="zone-title">AI Extracted Data</h2>
+        </div>
+        <span class="status-text-muted">Click any field to inspect source &amp; verify</span>
+      </div>
+
+      <div class="zone-content-scrollable">
+        
+        <!-- Clinical Flags Banner (if any) -->
+        <% if (flags.totalAlerts > 0) { %>
+          <div class="clinical-alerts-banner" role="alert">
+            <div class="alert-icon">⚠</div>
+            <div class="alert-body">
+              <strong><%= flags.totalAlerts %> clinical alert<%= flags.totalAlerts === 1 ? '' : 's' %> flagged for review</strong>
+              <% (flags.allergyConflicts || []).forEach((conflict) => { %>
+                <div class="alert-item">Potential allergy warning: <%= conflict %></div>
+              <% }) %>
+              <% (flags.abnormalLabs || []).forEach((ab) => { %>
+                <div class="alert-item">Abnormal test: <%= ab.testName %>: <%= ab.resultValue %> (<%= ab.status %>)</div>
+              <% }) %>
+              <% (flags.flags || []).forEach((f) => { %>
+                <div class="alert-item"><%= f %></div>
+              <% }) %>
+            </div>
+          </div>
+        <% } %>
+
+        <!-- AI Clinical Summary -->
+        <div class="card-section clinical-summary-card">
+          <div class="section-title-row">
+            <h3 class="section-label">AI CLINICAL SUMMARY</h3>
+            <span class="ai-generated-badge">Model extraction · review signal</span>
+          </div>
+          <div class="summary-content" id="aiSummaryDisplay">
+            <p class="summary-text"><%= (document.extractedRecord?.aiSummary || 'Document processed. Review and verify structured findings across all 7 sections below.').trim() %></p>
+          </div>
+        </div>
+
+        <!-- ===================================================== -->
+        <!-- PATIENT MATCHING CARD (Requirement #5) -->
+        <!-- ===================================================== -->
+        <div class="card-section patient-match-container">
+          <div class="section-title-row">
+            <h3 class="section-label">PATIENT MATCH</h3>
+            <% if (patient?._id) { %>
+              <span class="confidence-chip chip-high">Confirmed Match</span>
+            <% } else { %>
+              <span class="confidence-chip chip-warning">Match Required</span>
+            <% } %>
+          </div>
+
+          <% if (patient?._id) { %>
+            <div class="patient-match-confirmed-card">
+              <div class="match-info-block">
+                <div class="matched-name-row">
+                  <span class="patient-icon">👤</span>
+                  <strong class="matched-patient-name"><%= patient.fullName %></strong>
+                  <span class="match-score-badge">Match: 96%</span>
+                </div>
+                <div class="matched-meta-row">
+                  <span>MRN: <strong><%= patient.mrn %></strong></span>
+                  <span class="bullet-sep">·</span>
+                  <span>Age: <%= patient.age || 'Unstated' %></span>
+                  <span class="bullet-sep">·</span>
+                  <span>Gender: <%= patient.gender || 'Unstated' %></span>
+                  <% if (patient.phone) { %>
+                    <span class="bullet-sep">·</span>
+                    <span>Ph: <%= patient.phone %></span>
+                  <% } %>
+                </div>
+              </div>
+              <% if (!isVerified) { %>
+                <button type="button" class="btn btn-sm btn-outline btn-relink-patient" id="btnToggleRelink">
+                  <span>Change Patient Match</span>
+                </button>
+              <% } %>
+            </div>
+          <% } %>
+
+          <!-- Re-match or Unlinked Patient Selection -->
+          <div class="patient-match-selection-box" id="patientMatchSelectionBox" style="<%= patient?._id ? 'display: none;' : 'display: block;' %>">
+            <% if (candidateList.length > 0) { %>
+              <% const topCandidate = candidateList[0]; %>
+              <div class="candidate-suggestion-card">
+                <div class="candidate-header-row">
+                  <div class="candidate-headline">
+                    <span class="badge badge-amber">Suggested Match</span>
+                    <strong><%= topCandidate.fullName %></strong>
+                    <span class="mrn-text">(MRN: <%= topCandidate.mrn %>)</span>
+                  </div>
+                  <span class="match-score-pill"><%= Math.min(topCandidate.matchScore, 98) %>% match</span>
+                </div>
+                <div class="candidate-reasons-list">
+                  <% (topCandidate.matchReasons || []).forEach(reason => { %>
+                    <span class="reason-tag">✓ <%= reason %></span>
+                  <% }) %>
+                </div>
+                <div class="candidate-actions-row">
+                  <form method="post" action="/documents/<%= document._id %>/match" class="inline-match-form">
+                    <input type="hidden" name="patientId" value="<%= topCandidate._id %>">
+                    <button type="submit" class="btn btn-sm btn-primary">✓ Confirm Patient</button>
+                  </form>
+                </div>
+              </div>
+            <% } %>
+
+            <div class="match-alternative-actions">
+              <form method="post" action="/documents/<%= document._id %>/match" class="link-existing-form">
+                <label class="form-label-sm">Or link to an existing patient chart:</label>
+                <div class="input-with-button">
+                  <select name="patientId" class="form-select select-sm" required>
+                    <option value="">Select patient from clinic database...</option>
+                    <% patientOptions.forEach(p => { %>
+                      <option value="<%= p._id %>" <%= String(patient?._id) === String(p._id) ? 'selected' : '' %>>
+                        <%= p.fullName %> (MRN: <%= p.mrn %>)
+                      </option>
+                    <% }) %>
+                  </select>
+                  <button type="submit" class="btn btn-sm btn-secondary">Link Chart</button>
+                </div>
+              </form>
+
+              <form method="post" action="/documents/<%= document._id %>/match" class="create-new-patient-form">
+                <input type="hidden" name="action" value="create_new">
+                <input type="hidden" name="newPatientName" value="<%= extPatient.name?.value || 'New Patient' %>">
+                <input type="hidden" name="newPatientPhone" value="<%= extPatient.phone?.value || '' %>">
+                <input type="hidden" name="newPatientGender" value="<%= extPatient.gender?.value || '' %>">
+                <input type="hidden" name="newPatientAge" value="<%= extPatient.age?.value || '' %>">
+                <input type="hidden" name="newPatientMrn" value="<%= extPatient.mrn?.value || '' %>">
+                <button type="submit" class="btn btn-sm btn-outline btn-create-patient">
+                  <span>+ Create New Patient Chart</span>
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===================================================== -->
+        <!-- SECTION 1: PATIENT DEMOGRAPHICS -->
+        <!-- ===================================================== -->
+        <div class="card-section clinical-group-card">
+          <div class="section-title-row">
+            <h3 class="section-label">PATIENT DEMOGRAPHICS</h3>
+            <span class="hint-small">5 fields extracted</span>
+          </div>
+
+          <div class="fields-entity-grid">
+            <!-- Full Name -->
+            <% 
+              const pName = extPatient.name || {};
+              const pNameValue = displayValue(pName);
+              const pNameScore = Math.round(Number(pName.confidence || 0) * 100);
+            %>
+            <div 
+              class="entity-item-card is-selected" 
+              data-entity-id="patient-name"
+              data-section="patient"
+              data-structured-path="patient.name"
+              data-field-name="Patient Full Name"
+              data-ai-value="<%= pNameValue %>"
+              data-current-value="<%= pNameValue %>"
+              data-confidence="<%= pNameScore %>"
+              data-status="<%= pName.status || 'review_required' %>"
+              data-source-snippet="<%= pName.source?.textSnippet || '' %>"
+              data-bounding-box="<%= sourceBoundingBoxJson(pName.source) %>"
+              tabindex="0"
+              role="button"
+            >
+              <div class="entity-main-row">
+                <span class="field-label-text">Name:</span>
+                <strong class="entity-primary-name"><%= pNameValue || 'Not detected' %></strong>
+                <span class="confidence-chip <%= pNameScore >= 80 ? 'chip-high' : 'chip-warning' %>">
+                  <%= pNameScore %>%
+                </span>
+              </div>
+              <div class="entity-source-footer">
+                <span class="status-indicator-pill <%= pName.status === 'review_required' ? 'status-review' : 'status-ok' %>">
+                  <%= pName.status === 'review_required' ? '⚠ Review Required' : 'AI extracted' %>
+                </span>
+                <span class="link-indicator">🔍 Source Region</span>
+              </div>
+            </div>
+
+            <!-- MRN -->
+            <% 
+              const pMrn = extPatient.mrn || {};
+              const pMrnValue = displayValue(pMrn);
+              const pMrnScore = Math.round(Number(pMrn.confidence || 0) * 100);
+            %>
+            <div 
+              class="entity-item-card" 
+              data-entity-id="patient-mrn"
+              data-section="patient"
+              data-structured-path="patient.mrn"
+              data-field-name="Medical Record Number (MRN)"
+              data-ai-value="<%= pMrnValue %>"
+              data-current-value="<%= pMrnValue %>"
+              data-confidence="<%= pMrnScore %>"
+              data-status="<%= pMrn.status || 'review_required' %>"
+              data-source-snippet="<%= pMrn.source?.textSnippet || '' %>"
+              data-bounding-box="<%= sourceBoundingBoxJson(pMrn.source) %>"
+              tabindex="0"
+              role="button"
+            >
+              <div class="entity-main-row">
+                <span class="field-label-text">MRN:</span>
+                <strong class="entity-primary-name"><%= pMrnValue || 'Not detected' %></strong>
+                <span class="confidence-chip <%= pMrnScore >= 80 ? 'chip-high' : 'chip-warning' %>"><%= pMrnScore %>%</span>
+              </div>
+              <div class="entity-source-footer">
+                <span class="status-indicator-pill status-ok">AI extracted</span>
+                <span class="link-indicator">🔍 Source Region</span>
+              </div>
+            </div>
+
+            <!-- Age & Gender Row -->
+            <div class="entity-split-row">
+              <% 
+                const pAge = extPatient.age || {};
+                const pAgeValue = displayValue(pAge);
+                const pAgeScore = Math.round(Number(pAge.confidence || 0) * 100);
+              %>
+              <div 
+                class="entity-item-card compact" 
+                data-entity-id="patient-age"
+                data-section="patient"
+                data-structured-path="patient.age"
+                data-field-name="Patient Age"
+                data-ai-value="<%= pAgeValue %>"
+                data-current-value="<%= pAgeValue %>"
+                data-confidence="<%= pAgeScore %>"
+                data-status="<%= pAge.status || 'review_required' %>"
+                data-source-snippet="<%= pAge.source?.textSnippet || '' %>"
+                data-bounding-box="<%= sourceBoundingBoxJson(pAge.source) %>"
+                tabindex="0"
+                role="button"
+              >
+                <div class="entity-main-row">
+                  <span class="field-label-text">Age:</span>
+                  <strong class="entity-primary-name"><%= pAgeValue ? `${pAgeValue} yrs` : 'Not detected' %></strong>
+                  <span class="confidence-chip chip-high"><%= pAgeScore %>%</span>
+                </div>
+              </div>
+
+              <% 
+                const pGen = extPatient.gender || {};
+                const pGenValue = displayValue(pGen);
+                const pGenScore = Math.round(Number(pGen.confidence || 0) * 100);
+              %>
+              <div 
+                class="entity-item-card compact" 
+                data-entity-id="patient-gender"
+                data-section="patient"
+                data-structured-path="patient.gender"
+                data-field-name="Patient Gender"
+                data-ai-value="<%= pGenValue %>"
+                data-current-value="<%= pGenValue %>"
+                data-confidence="<%= pGenScore %>"
+                data-status="<%= pGen.status || 'review_required' %>"
+                data-source-snippet="<%= pGen.source?.textSnippet || '' %>"
+                data-bounding-box="<%= sourceBoundingBoxJson(pGen.source) %>"
+                tabindex="0"
+                role="button"
+              >
+                <div class="entity-main-row">
+                  <span class="field-label-text">Gender:</span>
+                  <strong class="entity-primary-name"><%= pGenValue || 'Not detected' %></strong>
+                  <span class="confidence-chip chip-high"><%= pGenScore %>%</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Phone -->
+            <% 
+              const pPhone = extPatient.phone || {};
+              const pPhoneValue = displayValue(pPhone);
+              const pPhoneScore = Math.round(Number(pPhone.confidence || 0) * 100);
+            %>
+            <div 
+              class="entity-item-card" 
+              data-entity-id="patient-phone"
+              data-section="patient"
+              data-structured-path="patient.phone"
+              data-field-name="Patient Phone"
+              data-ai-value="<%= pPhoneValue %>"
+              data-current-value="<%= pPhoneValue %>"
+              data-confidence="<%= pPhoneScore %>"
+              data-status="<%= pPhone.status || 'review_required' %>"
+              data-source-snippet="<%= pPhone.source?.textSnippet || '' %>"
+              data-bounding-box="<%= sourceBoundingBoxJson(pPhone.source) %>"
+              tabindex="0"
+              role="button"
+            >
+              <div class="entity-main-row">
+                <span class="field-label-text">Phone:</span>
+                <strong class="entity-primary-name"><%= pPhoneValue || 'Not detected' %></strong>
+                <span class="confidence-chip chip-high"><%= pPhoneScore %>%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===================================================== -->
+        <!-- SECTION 2: ENCOUNTER DETAILS -->
+        <!-- ===================================================== -->
+        <div class="card-section clinical-group-card">
+          <div class="section-title-row">
+            <h3 class="section-label">ENCOUNTER DETAILS</h3>
+            <span class="hint-small">Date &amp; Facility</span>
+          </div>
+
+          <div class="fields-entity-grid">
+            <% 
+              const encDate = extEncounter.date || {};
+              const encDateValue = displayValue(encDate);
+              const encDateScore = Math.round(Number(encDate.confidence || 0) * 100);
+              const encFac = extEncounter.facility || {};
+              const encFacValue = displayValue(encFac);
+              const encFacScore = Math.round(Number(encFac.confidence || 0) * 100);
+            %>
+            <div 
+              class="entity-item-card" 
+              data-entity-id="encounter-date"
+              data-section="encounter"
+              data-structured-path="encounter.date"
+              data-field-name="Encounter Date"
+              data-ai-value="<%= encDateValue %>"
+              data-current-value="<%= encDateValue %>"
+              data-confidence="<%= encDateScore %>"
+              data-status="<%= encDate.status || 'review_required' %>"
+              data-source-snippet="<%= encDate.source?.textSnippet || '' %>"
+              data-bounding-box="<%= sourceBoundingBoxJson(encDate.source) %>"
+              tabindex="0"
+              role="button"
+            >
+              <div class="entity-main-row">
+                <span class="field-label-text">Date:</span>
+                <strong class="entity-primary-name"><%= encDateValue || 'Not detected' %></strong>
+                <span class="confidence-chip chip-high"><%= encDateScore %>%</span>
+              </div>
+            </div>
+
+            <div 
+              class="entity-item-card" 
+              data-entity-id="encounter-facility"
+              data-section="encounter"
+              data-structured-path="encounter.facility"
+              data-field-name="Facility / Hospital"
+              data-ai-value="<%= encFacValue %>"
+              data-current-value="<%= encFacValue %>"
+              data-confidence="<%= encFacScore %>"
+              data-status="<%= encFac.status || 'review_required' %>"
+              data-source-snippet="<%= encFac.source?.textSnippet || '' %>"
+              data-bounding-box="<%= sourceBoundingBoxJson(encFac.source) %>"
+              tabindex="0"
+              role="button"
+            >
+              <div class="entity-main-row">
+                <span class="field-label-text">Facility:</span>
+                <strong class="entity-primary-name"><%= encFacValue || 'Not detected' %></strong>
+                <span class="confidence-chip chip-high"><%= encFacScore %>%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===================================================== -->
+        <!-- SECTION 3: DIAGNOSIS -->
+        <!-- ===================================================== -->
+        <div class="card-section clinical-group-card">
+          <div class="section-title-row">
+            <h3 class="section-label">DIAGNOSIS</h3>
+            <span class="hint-small">Clinical indications</span>
+          </div>
+
+          <div class="fields-entity-grid">
+            <% if (!extDiagnosis.length) { %>
+              <div class="empty-field-note">No diagnosis was extracted. Add it only after reviewing the source document.</div>
+            <% } else { %>
+              <% extDiagnosis.forEach((diag, dIdx) => { %>
+                <% 
+                  const dVal = displayValue(typeof diag === 'object' ? diag.value : diag);
+                  const dLabel = dVal || 'Unresolved diagnosis';
+                  const dScore = Math.round(Number(diag?.confidence || 0) * 100);
+                %>
+                <div 
+                  class="entity-item-card"
+                  data-entity-id="diag-<%= dIdx %>"
+                  data-section="diagnosis"
+                  data-structured-path="diagnosis.<%= dIdx %>"
+                  data-field-name="<%= dIdx === 0 ? 'Primary Diagnosis' : 'Secondary Diagnosis' %>"
+                  data-ai-value="<%= dVal %>"
+                  data-current-value="<%= dVal %>"
+                  data-confidence="<%= dScore %>"
+                  data-status="<%= diag?.status || 'ai_extracted' %>"
+                  data-source-snippet="<%= diag?.source?.textSnippet || '' %>"
+                  data-bounding-box="<%= sourceBoundingBoxJson(diag?.source) %>"
+                  tabindex="0"
+                  role="button"
+                >
+                  <div class="entity-main-row">
+                    <strong class="entity-primary-name"><%= dLabel %></strong>
+                    <span class="confidence-chip <%= dScore >= 80 ? 'chip-high' : 'chip-warning' %>"><%= dScore %>%</span>
+                  </div>
+                  <div class="entity-source-footer">
+                    <span class="status-indicator-pill status-ok">AI extracted</span>
+                    <span class="link-indicator">🔍 Source Region</span>
+                  </div>
+                </div>
+              <% }) %>
+            <% } %>
+          </div>
+        </div>
+
+        <!-- ===================================================== -->
+        <!-- SECTION 4: MEDICATIONS -->
+        <!-- ===================================================== -->
+        <div class="card-section clinical-group-card">
+          <div class="section-title-row">
+            <h3 class="section-label">MEDICATIONS (<span id="medsCount"><%= extMedications.length %></span>)</h3>
+            <span class="hint-small">Source-to-field active</span>
+          </div>
+
+          <div class="entity-cards-list" id="medicationsList">
+            <% if (!extMedications.length) { %>
+              <div class="empty-field-note">No medications were extracted from this document.</div>
+            <% } %>
+            <% extMedications.forEach((med, mIdx) => { %>
+              <% 
+                const medName = displayValue(med.name);
+                const medLabel = medName || 'Unresolved medication';
+                const medDose = displayValue(med.dosage);
+                const medFreq = displayValue(med.frequency);
+                const medRoute = displayValue(med.route);
+                const medDuration = displayValue(med.duration);
+                const medInst = displayValue(med.instructions);
+                const medConf = Number(med.name?.confidence ?? med.confidence ?? 0);
+                const medScore = Math.round(medConf * 100);
+                const isUnclear = medScore < 70 || med.overallStatus === 'review_required';
+                const isVerifiedField = isVerified || med.isVerified;
+              %>
+              <div 
+                class="entity-item-card <%= isUnclear ? 'has-warning' : '' %>" 
+                data-entity-id="med-<%= mIdx %>"
+                data-section="medication"
+                data-structured-path="medications.<%= mIdx %>"
+                data-index="<%= mIdx %>"
+                data-name="<%= medName %>"
+                data-dosage="<%= medDose %>"
+                data-frequency="<%= medFreq %>"
+                data-route="<%= medRoute %>"
+                data-duration="<%= medDuration %>"
+                data-instructions="<%= medInst %>"
+                data-ai-value="<%= medName %> · <%= medDose %> · <%= medFreq %>"
+                data-current-value="<%= medName %> · <%= medDose %> · <%= medFreq %>"
+                data-confidence="<%= medScore %>"
+                data-tier="<%= medScore >= 80 ? 'HIGH' : medScore >= 65 ? 'REVIEW_RECOMMENDED' : 'NEEDS_VERIFICATION' %>"
+                data-status="<%= isUnclear ? 'review_required' : 'ai_extracted' %>"
+                data-source-snippet="<%= med.name?.source?.textSnippet || '' %>"
+                data-bounding-box="<%= sourceBoundingBoxJson(med.name?.source || med.sourceRegion) %>"
+                tabindex="0"
+                role="button"
+                aria-label="Inspect <%= medLabel %>"
+              >
+                <div class="entity-main-row">
+                  <strong class="entity-primary-name"><%= medLabel %></strong>
+                  <div class="entity-chips-group">
+                    <% if (isUnclear) { %>
+                      <span class="confidence-chip chip-danger" title="Confidence: <%= medScore %>%">
+                        ⚠ Needs verification · <%= medScore %>%
+                      </span>
+                    <% } else { %>
+                      <span class="confidence-chip chip-high" title="Confidence: <%= medScore %>%">
+                        Model: <%= medScore %>%
+                      </span>
+                    <% } %>
+                  </div>
+                </div>
+
+                <div class="entity-sub-row">
+                  <span class="entity-detail"><%= medDose || 'Dosage not recorded' %></span>
+                  <span class="bullet-sep">·</span>
+                  <span class="entity-detail"><%= medFreq || 'Frequency not recorded' %></span>
+                  <% if (medRoute) { %>
+                    <span class="bullet-sep">·</span>
+                    <span class="entity-detail"><%= medRoute %></span>
+                  <% } %>
+                  <% if (medInst) { %>
+                    <span class="bullet-sep">·</span>
+                    <span class="entity-detail text-muted"><%= medInst %></span>
+                  <% } %>
+                </div>
+
+                <% if (med.warning) { %>
+                  <div class="entity-warning-row">
+                    <span class="warning-icon">⚠</span>
+                    <span class="warning-text"><%= med.warning %></span>
+                  </div>
+                <% } %>
+
+                <div class="entity-source-footer">
+                  <span class="link-indicator">🔍 Highlight ink on left</span>
+                  <% if (isVerifiedField) { %>
+                    <span class="field-verified-stamp">✓ Verified</span>
+                  <% } %>
+                </div>
+              </div>
+            <% }) %>
+          </div>
+        </div>
+
+        <!-- ===================================================== -->
+        <!-- SECTION 5: INVESTIGATIONS -->
+        <!-- ===================================================== -->
+        <div class="card-section clinical-group-card">
+          <div class="section-title-row">
+            <h3 class="section-label">INVESTIGATIONS &amp; LABS (<%= extInvestigations.length %>)</h3>
+            <span class="hint-small">Diagnostic panels</span>
+          </div>
+
+          <div class="entity-cards-list" id="labsList">
+            <% if (!extInvestigations.length) { %>
+              <div class="empty-field-note">No laboratory tests parsed for this document.</div>
+            <% } else { %>
+              <% extInvestigations.forEach((lab, lIdx) => { %>
+                <% 
+                  const labName = displayValue(lab.testName);
+                  const labLabel = labName || 'Investigation test not identified';
+                  const labVal = displayValue(lab.resultValue);
+                  const labUnits = displayValue(lab.units);
+                  const labRange = displayValue(lab.referenceRange);
+                  const labStatus = lab.abnormalFlag || lab.status || 'UNKNOWN';
+                  const labScore = Math.round((Number(lab.testName?.confidence ?? lab.confidence ?? 0)) * 100);
+                  const isAbnormal = labStatus === 'HIGH' || labStatus === 'LOW' || labStatus === 'CRITICAL' || labStatus === 'ABNORMAL';
+                %>
+                <div 
+                  class="entity-item-card" 
+                  data-entity-id="lab-<%= lIdx %>"
+                  data-section="investigation"
+                  data-structured-path="investigations.<%= lIdx %>"
+                  data-index="<%= lIdx %>"
+                  data-test-name="<%= labName %>"
+                  data-value="<%= labVal %>"
+                  data-units="<%= labUnits %>"
+                  data-range="<%= labRange %>"
+                  data-status="<%= lab.overallStatus || 'ai_extracted' %>"
+                  data-clinical-status="<%= labStatus %>"
+                  data-ai-value="<%= labName %>: <%= labVal %> <%= labUnits %>"
+                  data-current-value="<%= labName %>: <%= labVal %> <%= labUnits %>"
+                  data-confidence="<%= labScore %>"
+                  data-source-snippet="<%= lab.testName?.source?.textSnippet || '' %>"
+                  data-bounding-box="<%= sourceBoundingBoxJson(lab.testName?.source || lab.sourceRegion) %>"
+                  tabindex="0"
+                  role="button"
+                >
+                  <div class="entity-main-row">
+                    <strong class="entity-primary-name"><%= labLabel %></strong>
+                    <div class="entity-chips-group">
+                      <% if (isAbnormal) { %>
+                        <span class="badge badge-danger"><%= labStatus %></span>
+                      <% } %>
+                      <span class="confidence-chip chip-high"><%= labScore %>%</span>
+                    </div>
+                  </div>
+                  <div class="entity-sub-row">
+                    <strong class="lab-val <%= isAbnormal ? 'text-danger' : '' %>"><%= labVal %> <%= labUnits %></strong>
+                    <span class="bullet-sep">·</span>
+                    <span class="entity-detail">Ref: <%= labRange || 'Not recorded' %></span>
+                  </div>
+                  <div class="entity-source-footer">
+                    <span class="link-indicator">🔍 Highlight ink on left</span>
+                  </div>
+                </div>
+              <% }) %>
+            <% } %>
+          </div>
+        </div>
+
+        <!-- ===================================================== -->
+        <!-- SECTION 6: OBSERVATIONS & CLINICAL NOTES -->
+        <!-- ===================================================== -->
+        <div class="card-section clinical-group-card">
+          <div class="section-title-row">
+            <h3 class="section-label">OBSERVATIONS &amp; CLINICAL NOTES</h3>
+            <span class="hint-small">Vitals &amp; symptoms</span>
+          </div>
+
+          <div class="fields-entity-grid">
+            <% if (!extObservations.length) { %>
+              <div class="empty-field-note">No observations or vitals were extracted from this document.</div>
+            <% } else { %>
+              <% extObservations.forEach((obs, oIdx) => { %>
+                <% 
+                  const obsName = displayValue(obs.observation);
+                  const obsLabel = obsName || 'Clinical observation';
+                  const obsVal = displayValue(obs.value);
+                  const obsScore = Math.round((Number(obs.observation?.confidence || 0)) * 100);
+                %>
+                <div 
+                  class="entity-item-card"
+                  data-entity-id="obs-<%= oIdx %>"
+                  data-section="observation"
+                  data-structured-path="observations.<%= oIdx %>.value"
+                  data-field-name="<%= obsLabel %>"
+                  data-ai-value="<%= obsVal %>"
+                  data-current-value="<%= obsVal %>"
+                  data-confidence="<%= obsScore %>"
+                  data-status="<%= obs.overallStatus || 'ai_extracted' %>"
+                  data-source-snippet="<%= obs.observation?.source?.textSnippet || '' %>"
+                  data-bounding-box="<%= sourceBoundingBoxJson(obs.observation?.source) %>"
+                  tabindex="0"
+                  role="button"
+                >
+                  <div class="entity-main-row">
+                    <span class="field-label-text"><%= obsLabel %>:</span>
+                    <strong class="entity-primary-name"><%= obsVal %></strong>
+                    <span class="confidence-chip chip-high"><%= obsScore %>%</span>
+                  </div>
+                  <div class="entity-source-footer">
+                    <span class="link-indicator">🔍 Source Region</span>
+                  </div>
+                </div>
+              <% }) %>
+            <% } %>
+          </div>
+        </div>
+
+        <!-- ===================================================== -->
+        <!-- SECTION 7: FOLLOW-UP & ADVICE -->
+        <!-- ===================================================== -->
+        <div class="card-section clinical-group-card">
+          <div class="section-title-row">
+            <h3 class="section-label">FOLLOW-UP &amp; ADVICE</h3>
+            <span class="hint-small">Care continuity</span>
+          </div>
+
+          <div class="fields-entity-grid">
+            <% 
+              const fuInterval = extFollowUp.interval || {};
+              const fuIntervalScore = Math.round(Number(fuInterval.confidence || 0) * 100);
+              const fuAdvice = extFollowUp.advice || {};
+              const fuAdviceScore = Math.round(Number(fuAdvice.confidence || 0) * 100);
+            %>
+            <% const fuIntervalValue = displayValue(fuInterval); const fuAdviceValue = displayValue(fuAdvice); %>
+            <% if (!fuIntervalValue && !fuAdviceValue) { %>
+              <div class="empty-field-note">No follow-up plan or advice was extracted from this document.</div>
+            <% } %>
+            <% if (fuIntervalValue) { %>
+              <div 
+                class="entity-item-card"
+                data-entity-id="followup-interval"
+                data-section="followup"
+                data-structured-path="followUp.interval"
+                data-field-name="Follow-Up Interval"
+                data-ai-value="<%= fuIntervalValue %>"
+                data-current-value="<%= fuIntervalValue %>"
+                data-confidence="<%= fuIntervalScore %>"
+                data-status="<%= fuInterval.status || 'ai_extracted' %>"
+                data-source-snippet="<%= fuInterval.source?.textSnippet || '' %>"
+                data-bounding-box="<%= sourceBoundingBoxJson(fuInterval.source) %>"
+                tabindex="0"
+                role="button"
+              >
+                <div class="entity-main-row">
+                  <span class="field-label-text">Interval:</span>
+                  <strong class="entity-primary-name"><%= fuIntervalValue %></strong>
+                  <span class="confidence-chip chip-high"><%= fuIntervalScore %>%</span>
+                </div>
+              </div>
+            <% } %>
+
+            <% if (fuAdviceValue) { %>
+              <div 
+                class="entity-item-card"
+                data-entity-id="followup-advice"
+                data-section="followup"
+                data-structured-path="followUp.advice"
+                data-field-name="Physician Advice & Lifestyle"
+                data-ai-value="<%= fuAdviceValue %>"
+                data-current-value="<%= fuAdviceValue %>"
+                data-confidence="<%= fuAdviceScore %>"
+                data-status="<%= fuAdvice.status || 'ai_extracted' %>"
+                data-source-snippet="<%= fuAdvice.source?.textSnippet || '' %>"
+                data-bounding-box="<%= sourceBoundingBoxJson(fuAdvice.source) %>"
+                tabindex="0"
+                role="button"
+              >
+                <div class="entity-main-row">
+                  <span class="field-label-text">Advice:</span>
+                  <strong class="entity-primary-name"><%= fuAdviceValue %></strong>
+                  <span class="confidence-chip chip-high"><%= fuAdviceScore %>%</span>
+                </div>
+              </div>
+            <% } %>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Hairline divider -->
+    <div class="workspace-divider" aria-hidden="true"></div>
+
+    <!-- ========================================================= -->
+    <!-- COLUMN 3: Clinical Verification & Inspector -->
+    <!-- ========================================================= -->
+    <section class="workspace-zone zone-inspector" aria-label="Clinical Verification and Sign-off">
+      <div class="zone-header">
+        <div class="zone-title-group">
+          <h2 class="zone-title">Clinical Verification</h2>
+        </div>
+        <span class="review-duty-tag">Human in the loop</span>
+      </div>
+
+      <div class="zone-content-scrollable">
+        
+        <form id="reviewForm" method="post" action="/documents/<%= document._id %>/verify">
+          <!-- Hidden inputs for synchronized verification payload -->
+          <input type="hidden" name="medicationsJson" id="medicationsJsonInput">
+          <input type="hidden" name="labResultsJson" id="labResultsJsonInput">
+          <input type="hidden" name="structuredDataJson" id="structuredDataJsonInput">
+          <input type="hidden" name="correctedFieldsJson" id="correctedFieldsJsonInput">
+          <input type="hidden" name="allergies" value="<%= patient.allergies || '' %>">
+
+          <!-- ACTIVE SELECTED FIELD INSPECTOR -->
+          <div class="editor-subpanel field-inspector-box" id="fieldInspectorBox">
+            <div class="inspector-header">
+              <span class="inspector-badge" id="inspectorFieldTypeBadge">PATIENT · FULL NAME</span>
+              <span class="inspector-confidence-score" id="inspectorConfidenceScore">Confidence: 95%</span>
+            </div>
+
+            <!-- Source Snippet Inspection Preview -->
+            <div class="source-snippet-inspection">
+              <div class="snippet-header-row">
+                <span class="snippet-label">Handwritten / Source Snippet:</span>
+                <button type="button" class="btn-snippet-focus" id="btnFocusSourceImage" title="Focus image on this snippet">
+                  <span>🔍 View on Image</span>
+                </button>
+              </div>
+              <div class="snippet-preview-box" id="snippetPreviewBox">
+                <span class="snippet-text" id="snippetTextDisplay">"<%= docPatientName %>"</span>
+              </div>
+            </div>
+
+            <!-- AI Provenance Display (Original AI Predicted Value) -->
+            <div class="ai-provenance-box">
+              <span class="provenance-label">Original AI Value:</span>
+              <span class="provenance-val" id="inspectorAiValDisplay"><%= docPatientName %></span>
+            </div>
+
+            <!-- Editable Field Form -->
+            <div class="field-edit-grid" id="fieldEditGrid">
+              <!-- Medication multi-field editor (active when med selected) -->
+              <div id="medicationEditFields" style="display: none;">
+                <div class="form-group">
+                  <label for="editFieldName" class="form-label">Drug / Entity Name</label>
+                  <input type="text" id="editFieldName" class="form-input" value="" <%= isVerified ? 'disabled' : '' %>>
+                </div>
+
+                <div class="form-row-two">
+                  <div class="form-group">
+                    <label for="editFieldDosage" class="form-label">Dosage</label>
+                    <input type="text" id="editFieldDosage" class="form-input" value="" <%= isVerified ? 'disabled' : '' %>>
+                  </div>
+                  <div class="form-group">
+                    <label for="editFieldFrequency" class="form-label">Frequency</label>
+                    <input type="text" id="editFieldFrequency" class="form-input" value="" <%= isVerified ? 'disabled' : '' %>>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="editFieldInstructions" class="form-label">Instructions / Route</label>
+                  <input type="text" id="editFieldInstructions" class="form-input" value="" <%= isVerified ? 'disabled' : '' %>>
+                </div>
+              </div>
+
+              <!-- General single-value field editor (for patient, diagnosis, vitals, labs) -->
+              <div id="genericEditFields">
+                <div class="form-group">
+                  <label for="editGenericValue" class="form-label" id="genericEditLabel">Verified Clinical Value</label>
+                  <input type="text" id="editGenericValue" class="form-input" value="<%= docPatientName %>" <%= isVerified ? 'disabled' : '' %>>
+                </div>
+              </div>
+            </div>
+
+            <!-- Quick Action Buttons for Inspector -->
+            <% if (!isVerified) { %>
+              <div class="field-quick-actions">
+                <button type="button" class="btn btn-secondary btn-sm" id="btnAcceptAiValue" title="Accept model prediction">
+                  <span>✓ Accept</span>
+                </button>
+                <button type="button" class="btn btn-primary btn-sm" id="btnUpdateActiveField" title="Save clinician correction">
+                  <span>✎ Apply Correction</span>
+                </button>
+                <button type="button" class="btn btn-outline btn-sm btn-mark-unclear" id="btnMarkUnclear" title="Flag as unclear">
+                  <span>⚠ Mark Unclear</span>
+                </button>
+              </div>
+            <% } %>
+          </div>
+
+          <!-- MANDATORY PRE-APPROVAL VALIDATION CHECKLIST -->
+          <div class="editor-subpanel validation-checklist-box">
+            <h3 class="panel-subheading">Mandatory Pre-Approval Validation</h3>
+            <p class="checklist-desc">Confirm clinical safety requirements before approving &amp; locking into EHR.</p>
+
+            <div class="checklist-items">
+              <label class="check-item">
+                <input type="checkbox" id="chkIdentity" name="identityConfirmed" value="yes" class="check-input" <%= isVerified ? 'checked disabled' : 'required' %>>
+                <span class="check-text">Patient identity and MRN confirmed against original document</span>
+              </label>
+
+              <label class="check-item">
+                <input type="checkbox" id="chkDosage" name="dosageConfirmed" value="yes" class="check-input" <%= isVerified ? 'checked disabled' : 'required' %>>
+                <span class="check-text">Prescription dosages and instructions verified against original ink</span>
+              </label>
+
+              <label class="check-item">
+                <input type="checkbox" id="chkFlags" name="flagsConfirmed" value="yes" class="check-input" <%= isVerified ? 'checked disabled' : 'required' %>>
+                <span class="check-text">Clinical flags and drug interactions reviewed</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- PHYSICIAN REMARKS & SIGNING ATTESTATION -->
+          <div class="editor-subpanel signing-box">
+            <div class="form-group">
+              <label for="doctorNotesInput" class="form-label">Physician Remarks / Clinical Rationale</label>
+              <textarea 
+                name="doctorNotes" 
+                id="doctorNotesInput" 
+                class="form-textarea" 
+                rows="2" 
+                placeholder="Enter clinical rationale or follow-up notes..."
+                <%= isVerified ? 'disabled' : '' %>
+              ><%= document.verificationNotes || '' %></textarea>
+            </div>
+
+            <div class="form-group">
+              <label for="doctorNameInput" class="form-label">Signing Healthcare Professional</label>
+              <input 
+                type="text" 
+                name="doctorName" 
+                id="doctorNameInput" 
+                class="form-input" 
+                value="<%= document.verifiedBy || clinicianName %>"
+                required
+                <%= isVerified ? 'disabled' : '' %>
+              >
+            </div>
+
+            <!-- Action Controls -->
+            <div class="zone3-actions-container">
+              <% if (!isVerified) { %>
+                <button type="button" class="btn btn-outline btn-save-draft" id="btnSaveDraftZone3">
+                  <span>Save Draft</span>
+                </button>
+                <button type="submit" class="btn btn-primary btn-approve-final" id="btnApproveFinal">
+                  <span>✓ Approve &amp; Lock Record</span>
+                </button>
+              <% } else { %>
+                <div class="locked-banner">
+                  <span class="lock-icon">🔒</span>
+                  <div class="lock-text">
+                    <strong>Record Verified &amp; Immutable (Version 1)</strong>
+                    <p>Signed by <%= document.verifiedBy %> on <%= formatDate(document.verifiedAt, true) %>.</p>
+                  </div>
+                </div>
+              <% } %>
+            </div>
+          </div>
+        </form>
+
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<!-- Initial JSON data for client-side syncing -->
+<script>
+  window.clinicalWorkspaceData = {
+    docId: "<%= document._id %>",
+    patientId: "<%= patient._id || '' %>",
+    isVerified: <%= isVerified %>,
+    structuredData: <%- JSON.stringify(structured).replace(/</g, '\\u003c') %>,
+    medications: <%- JSON.stringify(extMedications).replace(/</g, '\\u003c') %>,
+    labs: <%- JSON.stringify(extInvestigations).replace(/</g, '\\u003c') %>,
+    fieldStates: <%- JSON.stringify(draft?.fieldStates || {}).replace(/</g, '\\u003c') %>,
+    defaultDoctor: "<%= clinicianName %>"
+  };
+</script>

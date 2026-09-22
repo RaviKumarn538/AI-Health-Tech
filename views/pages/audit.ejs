@@ -1,0 +1,221 @@
+<% layout('/layouts/boilerplate') -%>
+
+<div class="audit-workspace-container">
+  <!-- Compact Enterprise Page Header -->
+  <header class="audit-page-header">
+    <div class="header-title-block">
+      <div class="header-breadcrumbs">
+        <a href="/dashboard" class="breadcrumb-link">Workspace</a>
+        <span class="breadcrumb-sep">/</span>
+        <span class="breadcrumb-current">Audit Trail</span>
+      </div>
+      <div class="audit-title-row">
+        <h1 class="audit-main-title">Audit Trail</h1>
+        <span class="ledger-status-pill" title="Cryptographically sealed and immutable audit stream">
+          <span class="lock-icon" aria-hidden="true">🔒</span>
+          <span class="status-text">Ledger Status: <strong>Immutable event stream</strong></span>
+        </span>
+      </div>
+      <p class="audit-subtitle">Complete chronological ledger of clinical events, OCR extractions, and clinician verifications.</p>
+    </div>
+  </header>
+
+  <!-- Consolidated Table Action Bar (Toolbar) -->
+  <div class="audit-toolbar-card">
+    <div class="toolbar-left">
+      <form class="audit-search-form" method="get" action="/audit">
+        <div class="audit-search-wrapper">
+          <svg class="search-icon-svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input 
+            type="search" 
+            name="search" 
+            value="<%= search %>" 
+            placeholder="Search by action, actor, or patient..." 
+            class="audit-search-input"
+            autocomplete="off"
+            aria-label="Search audit trail">
+          <% if (search) { %>
+            <a href="/audit" class="search-clear-link" title="Clear search">✕</a>
+          <% } %>
+        </div>
+        <button type="submit" class="btn btn-secondary btn-sm">Search</button>
+      </form>
+      <div class="audit-events-count-pill" title="Total captured events matching current criteria">
+        <span class="pulse-dot"></span>
+        <span class="count-text"><strong><%= logs.length %></strong> Events Captured</span>
+      </div>
+    </div>
+
+    <div class="toolbar-right">
+      <a href="/api/audit/export<%= search ? `?search=${encodeURIComponent(search)}` : '' %>" class="btn btn-outline btn-sm btn-export-csv" title="Export audit logs to CSV">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 10 12 15 17 10"></polyline>
+          <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        <span>Export CSV</span>
+      </a>
+
+      <a class="btn btn-outline btn-sm btn-refresh" href="/audit" title="Refresh event log">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="23 4 23 10 17 10"></polyline>
+          <polyline points="1 20 1 14 7 14"></polyline>
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+        </svg>
+        <span>Refresh</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Enterprise Audit Ledger Table -->
+  <section class="audit-table-card">
+    <div class="table-scroll-container">
+      <table class="audit-ledger-table">
+        <thead>
+          <tr>
+            <th class="col-event">EVENT</th>
+            <th class="col-actor">ACTOR</th>
+            <th class="col-patient">PATIENT / CONTEXT</th>
+            <th class="col-time">TIME</th>
+            <th class="col-details">DETAILS & PAYLOAD</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (!logs.length) { %>
+            <tr>
+              <td colspan="5">
+                <div class="audit-empty-state">
+                  <div class="empty-icon">🛡</div>
+                  <strong>No audit events found</strong>
+                  <p><%= search ? `No events match "${search}". Try clearing your search query.` : 'No activity recorded in the audit trail yet.' %></p>
+                  <% if (search) { %>
+                    <a href="/audit" class="btn btn-secondary btn-sm">Clear Search Filter</a>
+                  <% } %>
+                </div>
+              </td>
+            </tr>
+          <% } %>
+          <% logs.forEach((log) => { %>
+            <% 
+              const actLower = (log.action || '').toLowerCase();
+              let badgeClass = 'badge-action-default';
+              if (actLower.includes('verify') || actLower.includes('approved')) badgeClass = 'badge-action-verify';
+              else if (actLower.includes('extract') || actLower.includes('ai') || actLower.includes('ocr')) badgeClass = 'badge-action-extract';
+              else if (actLower.includes('upload')) badgeClass = 'badge-action-upload';
+              else if (actLower.includes('amend') || actLower.includes('edit')) badgeClass = 'badge-action-amend';
+              else if (actLower.includes('match')) badgeClass = 'badge-action-match';
+
+              // Clean, human-readable summary without raw JSON dumping
+              let detailSummary = '';
+              const d = log.details || {};
+              if (d.data?.model || d.model) detailSummary = `Model: ${d.data?.model || d.model}`;
+              else if (d.data?.filename || d.filename) detailSummary = `File: ${d.data?.filename || d.filename}`;
+              else if (d.data?.status || d.status) detailSummary = `Status: ${d.data?.status || d.status}`;
+              else if (d.data?.method || d.method) detailSummary = `Method: ${d.data?.method || d.method}`;
+              else if (d.recordType) detailSummary = `Type: ${d.recordType}`;
+              else if (Object.keys(d).length > 0) detailSummary = `${Object.keys(d).length} params recorded`;
+              else detailSummary = 'Clinical event recorded';
+            %>
+            <tr class="audit-row">
+              <td class="col-event">
+                <span class="audit-badge <%= badgeClass %>">
+                  <%= prettyType(log.action) %>
+                </span>
+              </td>
+              <td class="col-actor">
+                <div class="actor-cell">
+                  <strong class="actor-name"><%= log.actorName || 'System' %></strong>
+                  <span class="actor-role-pill"><%= log.actorRole || 'DOCTOR' %></span>
+                </div>
+              </td>
+              <td class="col-patient">
+                <div class="patient-doc-cell">
+                  <span class="patient-name"><%= log.patient?.fullName || 'System Event' %></span>
+                  <div class="doc-reference">
+                    <% if (log.document?.originalFilename) { %>
+                      <span class="doc-icon" aria-hidden="true">📄</span>
+                      <span class="doc-name"><%= log.document.originalFilename %></span>
+                    <% } else if (log.patient?.mrn) { %>
+                      <span class="mrn-badge">MRN: <%= log.patient.mrn %></span>
+                    <% } else { %>
+                      <span class="system-scope-text">System / Global</span>
+                    <% } %>
+                  </div>
+                </div>
+              </td>
+              <td class="col-time">
+                <span class="timestamp-label"><%= formatDate(log.timestamp, true) %></span>
+              </td>
+              <td class="col-details">
+                <div class="details-cell-wrapper">
+                  <span class="details-summary-badge" title="<%= detailSummary %>"><%= detailSummary %></span>
+                  <button 
+                    type="button" 
+                    class="btn-view-details js-open-audit-payload" 
+                    data-event="<%= log.action %>" 
+                    data-actor="<%= log.actorName || 'System' %>"
+                    data-role="<%= log.actorRole || 'DOCTOR' %>"
+                    data-time="<%= formatDate(log.timestamp, true) %>"
+                    data-patient="<%= log.patient?.fullName || 'System Event' %>"
+                    data-doc="<%= log.document?.originalFilename || '' %>"
+                    data-payload="<%= encodeURIComponent(JSON.stringify(log.details || {}, null, 2)) %>"
+                    title="Inspect formatted event payload"
+                  >
+                    <span>View Details</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                      <polyline points="15 3 21 3 21 9"></polyline>
+                      <line x1="10" y1="14" x2="21" y2="3"></line>
+                    </svg>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<!-- Slide-Over Payload Inspector Drawer (Clean Enterprise Modal/Drawer) -->
+<div class="audit-drawer-overlay" id="auditDrawerOverlay" style="display: none;" aria-hidden="true">
+  <div class="audit-drawer-panel" id="auditDrawerPanel" role="dialog" aria-modal="true" aria-labelledby="drawerEventTitle">
+    <div class="drawer-header">
+      <div class="drawer-title-group">
+        <span class="drawer-event-badge" id="drawerEventBadge">EVENT_NAME</span>
+        <h3 class="drawer-event-title" id="drawerEventTitle">Audit Event Payload</h3>
+      </div>
+      <button type="button" class="drawer-close-btn" id="auditDrawerCloseBtn" aria-label="Close payload drawer">✕</button>
+    </div>
+
+    <div class="drawer-meta-section">
+      <div class="drawer-meta-item">
+        <span class="meta-label">Actor</span>
+        <strong class="meta-val" id="drawerActorName">—</strong>
+      </div>
+      <div class="drawer-meta-item">
+        <span class="meta-label">Timestamp</span>
+        <strong class="meta-val" id="drawerTimestamp">—</strong>
+      </div>
+      <div class="drawer-meta-item">
+        <span class="meta-label">Patient / Context</span>
+        <strong class="meta-val" id="drawerPatientName">—</strong>
+      </div>
+    </div>
+
+    <div class="drawer-body">
+      <div class="payload-header-row">
+        <span class="payload-label">Formatted Event Payload (JSON)</span>
+        <button type="button" class="btn-copy-payload" id="btnCopyPayload">
+          <span class="copy-icon">📋</span>
+          <span class="copy-text">Copy JSON</span>
+        </button>
+      </div>
+      <pre class="payload-code-block"><code id="drawerPayloadCode">{}</code></pre>
+    </div>
+  </div>
+</div>

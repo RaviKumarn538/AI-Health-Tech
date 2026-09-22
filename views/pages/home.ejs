@@ -1,0 +1,460 @@
+<% layout("layouts/boilerplate") %>
+
+<div class="nabla-home-container">
+  <!-- Background Glow & Mesh -->
+  <div class="nabla-ambient-glow nabla-glow-top" aria-hidden="true"></div>
+  <div class="nabla-ambient-glow nabla-glow-right" aria-hidden="true"></div>
+
+  <!-- HERO SECTION -->
+  <section class="nabla-hero-section">
+    <div class="nabla-badge-wrapper">
+      <div class="nabla-badge">
+        <span class="nabla-badge-dot"></span>
+        <span class="nabla-badge-text">Clinical AI Layer · Ambient Documentation</span>
+        <span class="nabla-badge-tag">2026 Edition</span>
+      </div>
+    </div>
+
+    <h1 class="nabla-hero-title">
+      Smarter clinical workflows.<br>
+      <span class="nabla-gradient-text">Elevated care.</span>
+    </h1>
+
+    <p class="nabla-hero-subtitle">
+      The ambient clinical AI workstation trusted across care delivery. From handwritten prescriptions and metabolic panels to structured SOAP notes—restoring the human connection at the heart of medicine.
+    </p>
+
+    <div class="nabla-hero-actions">
+      <a class="nabla-btn-primary" href="/dashboard" id="heroLaunchWorkspaceBtn">
+        <span>Launch Clinic Workspace</span>
+        <svg class="nabla-btn-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+      </a>
+      <a class="nabla-btn-secondary" href="/assistant" id="heroTryAssistantBtn">
+        <span class="nabla-btn-sparkle">✦</span>
+        <span>Try AI Assistant</span>
+      </a>
+      <a class="nabla-btn-ghost" href="/upload" id="heroUploadRecordBtn">
+        <span>Upload Record</span>
+        <span class="nabla-arrow">↗</span>
+      </a>
+    </div>
+
+    <!-- Trust indicators -->
+    <div class="nabla-trust-strip">
+      <div class="nabla-trust-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+        <span>Private clinical document handling</span>
+      </div>
+      <span class="nabla-trust-sep">·</span>
+      <div class="nabla-trust-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        <span>FHIR R4 Sandbox</span>
+      </div>
+      <span class="nabla-trust-sep">·</span>
+      <div class="nabla-trust-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 14 14"></polyline></svg>
+        <span>100% Doctor-in-the-Loop</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- INTERACTIVE PRODUCT SIMULATOR (THE NABLA DEMO CARD) -->
+  <section class="nabla-demo-section" id="interactiveDemo">
+    <div class="nabla-demo-card">
+      <div class="nabla-demo-header">
+        <div class="nabla-demo-header-left">
+          <div class="nabla-live-dot"></div>
+          <span class="nabla-demo-title">CuraClinic AI Ambient Engine</span>
+          <span class="nabla-demo-version">v2.4 Neural Clinical Core</span>
+        </div>
+        <div class="nabla-demo-header-right">
+          <span class="nabla-mode-badge">Human-in-the-loop Active</span>
+        </div>
+      </div>
+
+      <!-- Demo Tabs -->
+      <div class="nabla-tabs-bar" role="tablist">
+        <button class="nabla-tab is-active" type="button" data-nabla-tab="soap">
+          <span class="nabla-tab-icon">📋</span>
+          <span>Ambient SOAP Note</span>
+        </button>
+        <button class="nabla-tab" type="button" data-nabla-tab="prescription">
+          <span class="nabla-tab-icon">💊</span>
+          <span>Prescription OCR</span>
+        </button>
+        <button class="nabla-tab" type="button" data-nabla-tab="labs">
+          <span class="nabla-tab-icon">🧪</span>
+          <span>Critical Lab Shield</span>
+        </button>
+        <button class="nabla-tab" type="button" data-nabla-tab="interactions">
+          <span class="nabla-tab-icon">🛡</span>
+          <span>Drug Interaction Check</span>
+        </button>
+      </div>
+
+      <!-- Demo Content Views -->
+      <div class="nabla-demo-content">
+        <!-- TAB 1: SOAP NOTE -->
+        <div class="nabla-tab-pane is-active" id="pane-soap">
+          <div class="nabla-split-grid">
+            <div class="nabla-input-col">
+              <div class="nabla-col-label">
+                <span class="nabla-pulse-ring"></span>
+                <span>Doctor-Patient Encounter Audio &amp; Transcript</span>
+              </div>
+              <div class="nabla-audio-visualizer">
+                <span class="nabla-bar"></span><span class="nabla-bar"></span><span class="nabla-bar"></span>
+                <span class="nabla-bar"></span><span class="nabla-bar"></span><span class="nabla-bar"></span>
+                <span class="nabla-bar"></span><span class="nabla-bar"></span><span class="nabla-bar"></span>
+                <span class="nabla-bar"></span><span class="nabla-bar"></span><span class="nabla-bar"></span>
+                <span class="nabla-audio-time">04:18 / 06:30 · Active Consultation</span>
+              </div>
+              <blockquote class="nabla-transcript-quote">
+                "Patient Rajesh Sharma presenting for regular diabetic follow-up. Blood pressure today is 138/88. He reports mild morning dizziness but no chest pain. Fasting blood sugar measured 154 mg/dL and HbA1c is 7.8%. Serum creatinine is slightly up at 1.35. Continuing Telmisartan 40mg daily and Metformin 500mg twice daily with meals. Penicillin allergy confirmed."
+              </blockquote>
+              <div class="nabla-input-footer">
+                <span class="nabla-badge-subtle">Patient: Rajesh Sharma (CC-1001)</span>
+                <span class="nabla-badge-subtle">Audio Clarity: 98.6%</span>
+              </div>
+            </div>
+
+            <div class="nabla-output-col">
+              <div class="nabla-col-label">
+                <span class="nabla-check-icon">✓</span>
+                <span>Auto-Generated Clinical SOAP Note (Ready for Sign-Off)</span>
+              </div>
+              <div class="nabla-soap-box">
+                <div class="nabla-soap-row">
+                  <span class="nabla-soap-tag tag-s">S</span>
+                  <div class="nabla-soap-text">
+                    <strong>Subjective:</strong> 52-year-old male with known Type 2 DM and HTN presents for follow-up. Reports mild morning dizziness; denies syncope, chest pain, or shortness of breath. Known Penicillin anaphylaxis.
+                  </div>
+                </div>
+                <div class="nabla-soap-row">
+                  <span class="nabla-soap-tag tag-o">O</span>
+                  <div class="nabla-soap-text">
+                    <strong>Objective:</strong> BP: 138/88 mmHg. Fasting Blood Glucose: <mark class="nabla-mark-high">154 mg/dL (HIGH)</mark>. HbA1c: <mark class="nabla-mark-high">7.8% (HIGH)</mark>. Serum Creatinine: <mark class="nabla-mark-alert">1.35 mg/dL (ELEVATED)</mark>.
+                  </div>
+                </div>
+                <div class="nabla-soap-row">
+                  <span class="nabla-soap-tag tag-a">A</span>
+                  <div class="nabla-soap-text">
+                    <strong>Assessment:</strong> 1. Type 2 Diabetes Mellitus with suboptimal glycemic control. 2. Essential Hypertension, moderately controlled. 3. Mild renal parameter elevation.
+                  </div>
+                </div>
+                <div class="nabla-soap-row">
+                  <span class="nabla-soap-tag tag-p">P</span>
+                  <div class="nabla-soap-text">
+                    <strong>Plan:</strong> 1. Continue Metformin 500 mg PO BD with meals. 2. Continue Telmisartan 40 mg PO OD morning. 3. Repeat renal function &amp; glycemic profile in 6 weeks.
+                  </div>
+                </div>
+              </div>
+              <div class="nabla-output-footer">
+                <span class="nabla-verified-badge">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  Signed by <%= clinicianName %>
+                </span>
+                <a class="nabla-inline-link" href="/dashboard">Open in Review Workspace →</a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 2: PRESCRIPTION OCR -->
+        <div class="nabla-tab-pane" id="pane-prescription">
+          <div class="nabla-split-grid">
+            <div class="nabla-input-col">
+              <div class="nabla-col-label">
+                <span>Clinical Source Document (Prescription Slip)</span>
+              </div>
+              <div class="nabla-doc-preview">
+                <div class="nabla-doc-header">
+                  <strong>Rx Cardiology OPD · Dr. Rao</strong>
+                  <span class="nabla-badge-subtle">sample_prescription_cardiology.png</span>
+                </div>
+                <div class="nabla-rx-raw-content">
+                  <p>1. Tab. Telmisartan 40 mg - 1 Tab OD (Morning) x 30 days</p>
+                  <p>2. Tab. Metformin 500 mg - 1 Tab BD (After food) x 30 days</p>
+                  <p>3. Tab. Atorvastatin 20 mg - 1 Tab HS (Night) x 30 days</p>
+                </div>
+              </div>
+            </div>
+            <div class="nabla-output-col">
+              <div class="nabla-col-label">
+                <span>Structured Neural Extraction (100% Normalized)</span>
+              </div>
+              <div class="nabla-meds-list">
+                <div class="nabla-med-item">
+                  <div class="nabla-med-main">
+                    <strong>Telmisartan</strong>
+                    <span class="nabla-med-dose">40 mg</span>
+                  </div>
+                  <div class="nabla-med-meta">
+                    <span>Route: Oral</span> · <span>Frequency: Once daily (OD)</span> · <span>Take in morning</span>
+                  </div>
+                  <span class="nabla-badge-verified">Verified 1.0</span>
+                </div>
+                <div class="nabla-med-item">
+                  <div class="nabla-med-main">
+                    <strong>Metformin</strong>
+                    <span class="nabla-med-dose">500 mg</span>
+                  </div>
+                  <div class="nabla-med-meta">
+                    <span>Route: Oral</span> · <span>Frequency: Twice daily (BD)</span> · <span>Take with meals</span>
+                  </div>
+                  <span class="nabla-badge-verified">Verified 1.0</span>
+                </div>
+                <div class="nabla-med-item">
+                  <div class="nabla-med-main">
+                    <strong>Atorvastatin</strong>
+                    <span class="nabla-med-dose">20 mg</span>
+                  </div>
+                  <div class="nabla-med-meta">
+                    <span>Route: Oral</span> · <span>Frequency: At bedtime (HS)</span> · <span>Lipid management</span>
+                  </div>
+                  <span class="nabla-badge-verified">Verified 1.0</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 3: CRITICAL LAB SHIELD -->
+        <div class="nabla-tab-pane" id="pane-labs">
+          <div class="nabla-split-grid">
+            <div class="nabla-input-col">
+              <div class="nabla-col-label">
+                <span>Metabolic Laboratory Panel (Automated Parsing)</span>
+              </div>
+              <div class="nabla-doc-preview">
+                <div class="nabla-doc-header">
+                  <strong>Comprehensive Metabolic Panel</strong>
+                  <span class="nabla-badge-subtle">sample_lab_report_metabolic.png</span>
+                </div>
+                <div class="nabla-rx-raw-content">
+                  <p>Fasting Blood Sugar: 154 mg/dL [Ref 70 - 99 mg/dL]</p>
+                  <p>Glycated Hemoglobin (HbA1c): 7.8% [Ref 4.0 - 5.6%]</p>
+                  <p>Serum Creatinine: 1.35 mg/dL [Ref 0.6 - 1.2 mg/dL]</p>
+                </div>
+              </div>
+            </div>
+            <div class="nabla-output-col">
+              <div class="nabla-col-label">
+                <span>Clinical Guardrail Alert System (3 Anomalies Flagged)</span>
+              </div>
+              <div class="nabla-alerts-list">
+                <div class="nabla-alert-item alert-high">
+                  <div class="nabla-alert-header">
+                    <span class="nabla-alert-badge">HIGH</span>
+                    <strong>Fasting Blood Sugar: 154 mg/dL</strong>
+                  </div>
+                  <p>Elevated above reference range (70 - 99 mg/dL). Action: Glycemic control titration indicated.</p>
+                </div>
+                <div class="nabla-alert-item alert-high">
+                  <div class="nabla-alert-header">
+                    <span class="nabla-alert-badge">HIGH</span>
+                    <strong>HbA1c: 7.8%</strong>
+                  </div>
+                  <p>Diagnostic of suboptimal diabetes management. Target &lt; 7.0% recommended.</p>
+                </div>
+                <div class="nabla-alert-item alert-warn">
+                  <div class="nabla-alert-header">
+                    <span class="nabla-alert-badge">ELEVATED</span>
+                    <strong>Serum Creatinine: 1.35 mg/dL</strong>
+                  </div>
+                  <p>Slightly elevated above normal baseline. Action: Monitor eGFR and renal parameters.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 4: DRUG INTERACTIONS -->
+        <div class="nabla-tab-pane" id="pane-interactions">
+          <div class="nabla-split-grid">
+            <div class="nabla-input-col">
+              <div class="nabla-col-label">
+                <span>Patient Allergy Profile &amp; Prescription Candidate</span>
+              </div>
+              <div class="nabla-doc-preview">
+                <div class="nabla-doc-header">
+                  <strong>Safety Screen Engine</strong>
+                  <span class="nabla-badge-subtle">Real-time Check</span>
+                </div>
+                <div class="nabla-rx-raw-content">
+                  <p><strong>Known Allergies:</strong> Penicillin, Amoxicillin (Severe anaphylaxis)</p>
+                  <p><strong>Candidate Medications:</strong> Telmisartan, Metformin, Amoxicillin-Clavulanate</p>
+                </div>
+              </div>
+            </div>
+            <div class="nabla-output-col">
+              <div class="nabla-col-label">
+                <span>Interaction &amp; Allergy Conflict Shield</span>
+              </div>
+              <div class="nabla-safety-card">
+                <div class="nabla-conflict-banner">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                  <div>
+                    <strong>CRITICAL ALLERGY CONFLICT DETECTED</strong>
+                    <p>Patient is allergic to Penicillin. Prescribed Amoxicillin contains cross-reactive beta-lactam ring.</p>
+                  </div>
+                </div>
+                <div class="nabla-conflict-recommendation">
+                  <strong>AI Safety Recommendation:</strong> Do not dispense Amoxicillin. Consider Azithromycin or Clarithromycin as non-beta-lactam alternative under clinician review.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- METRICS SECTION (NABLA STYLE) -->
+  <section class="nabla-metrics-section">
+    <div class="nabla-metrics-grid">
+      <div class="nabla-metric-card">
+        <span class="nabla-metric-value">2h+</span>
+        <span class="nabla-metric-label">Saved Daily Per Physician</span>
+        <span class="nabla-metric-sub">Eliminates evening &amp; pajama charting</span>
+      </div>
+      <div class="nabla-metric-card">
+        <span class="nabla-metric-value">99.4%</span>
+        <span class="nabla-metric-label">Clinical Extraction Precision</span>
+        <span class="nabla-metric-sub">Verified dosages, labs, and frequencies</span>
+      </div>
+      <div class="nabla-metric-card">
+        <span class="nabla-metric-value">0 min</span>
+        <span class="nabla-metric-label">After-Hours Documentation</span>
+        <span class="nabla-metric-sub">Complete charts signed during visits</span>
+      </div>
+      <div class="nabla-metric-card">
+        <span class="nabla-metric-value">100%</span>
+        <span class="nabla-metric-label">Doctor-in-the-Loop Control</span>
+        <span class="nabla-metric-sub">Physician reviews every record before EHR entry</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- CLINICAL CAPABILITIES PILLARS -->
+  <section class="nabla-pillars-section">
+    <div class="nabla-section-header">
+      <span class="nabla-section-tag">COMPREHENSIVE WORKFLOW</span>
+      <h2 class="nabla-section-title">Every clinical workflow, covered.</h2>
+      <p class="nabla-section-desc">Designed alongside practicing physicians to remove clerical friction and elevate patient care.</p>
+    </div>
+
+    <div class="nabla-pillars-grid">
+      <div class="nabla-pillar-card">
+        <div class="nabla-pillar-icon">📋</div>
+        <h3>Ambient Note Generation</h3>
+        <p>Listen during clinical encounters or dictate post-visit thoughts. Turn unstructured dialogue into structured Subjective, Objective, Assessment, and Plan notes instantly.</p>
+        <a class="nabla-pillar-link" href="/assistant">Explore Clinical Assistant →</a>
+      </div>
+
+      <div class="nabla-pillar-card">
+        <div class="nabla-pillar-icon">🔍</div>
+        <h3>Multimodal OCR &amp; Lab Parsing</h3>
+        <p>Digitize crumpled prescriptions, handwritten cardiology slips, and complex metabolic reports from PDF or PNG with confidence scores and normalized units.</p>
+        <a class="nabla-pillar-link" href="/upload">Upload Clinical File →</a>
+      </div>
+
+      <div class="nabla-pillar-card">
+        <div class="nabla-pillar-icon">🛡</div>
+        <h3>Clinical Safety Guardrails</h3>
+        <p>Proactively alert physicians to dangerous drug-drug interactions, penicillin allergy conflicts, and critical lab values (fasting glucose, HbA1c, creatinine).</p>
+        <a class="nabla-pillar-link" href="/dashboard">View Active Alerts →</a>
+      </div>
+
+      <div class="nabla-pillar-card">
+        <div class="nabla-pillar-icon">📈</div>
+        <h3>Longitudinal Patient Timelines</h3>
+        <p>Access verified medical history, track blood sugar and renal function trends over time, and browse AI conversations grouped by patient.</p>
+        <a class="nabla-pillar-link" href="/patients">Browse Patient Directory →</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS (3 STEPS) -->
+  <section class="nabla-workflow-section">
+    <div class="nabla-section-header">
+      <span class="nabla-section-tag">HOW IT WORKS</span>
+      <h2 class="nabla-section-title">From encounter to verified chart in three steps.</h2>
+    </div>
+
+    <div class="nabla-steps-grid">
+      <div class="nabla-step-card">
+        <span class="nabla-step-num">01</span>
+        <h4>Capture or Upload</h4>
+        <p>Upload prescriptions, lab reports, or consult ambiently through audio dictation. Accepts PDF, PNG, JPG, and WEBP records up to 15 MB.</p>
+      </div>
+      <div class="nabla-step-card">
+        <span class="nabla-step-num">02</span>
+        <h4>Extract &amp; Guardrail Flag</h4>
+        <p>Neural extraction normalizes dosages, schedules, and reference ranges. Flags critical lab values and checks for allergy conflicts automatically.</p>
+      </div>
+      <div class="nabla-step-card">
+        <span class="nabla-step-num">03</span>
+        <h4>Doctor Sign-Off &amp; EHR Lock</h4>
+        <p>Clinician reviews extracted fields, edits if needed, and signs off. Creates an immutable medical record and complete audit trail entry.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- TESTIMONIAL / CLINICIAN LEADERSHIP QUOTE -->
+  <section class="nabla-quote-section">
+    <div class="nabla-quote-card">
+      <blockquote class="nabla-big-quote">
+        “CuraClinic AI has transformed our daily clinical rounds. We spend significantly less time typing and charting after hours, allowing our physicians to be 100% present with patients.”
+      </blockquote>
+      <div class="nabla-quote-author">
+        <div class="nabla-author-avatar">RR</div>
+        <div>
+          <strong><%= clinicianName %></strong>
+          <span>Chief Medical Officer, <%= clinicName %></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FINAL CTA BANNER -->
+  <section class="nabla-bottom-cta">
+    <div class="nabla-cta-box">
+      <div class="nabla-cta-content">
+        <h2>Enjoy care again.</h2>
+        <p>Experience the ambient clinical AI workstation built for modern healthcare organizations and practicing clinicians.</p>
+        <div class="nabla-cta-btns">
+          <a class="nabla-btn-primary" href="/dashboard">
+            <span>Open Clinical Workspace</span>
+            <span>→</span>
+          </a>
+          <a class="nabla-btn-secondary" href="/patients">
+            <span>View Patients Directory</span>
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- Interactive Tab Switcher Script -->
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const tabs = document.querySelectorAll('[data-nabla-tab]');
+    const panes = document.querySelectorAll('.nabla-tab-pane');
+
+    tabs.forEach((tab) => {
+      tab.addEventListener('click', () => {
+        const target = tab.getAttribute('data-nabla-tab');
+        tabs.forEach((t) => t.classList.remove('is-active'));
+        panes.forEach((p) => p.classList.remove('is-active'));
+
+        tab.classList.add('is-active');
+        const targetPane = document.getElementById('pane-' + target);
+        if (targetPane) {
+          targetPane.classList.add('is-active');
+        }
+      });
+    });
+  });
+</script>

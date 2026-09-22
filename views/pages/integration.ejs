@@ -1,0 +1,177 @@
+<% layout('/layouts/boilerplate') -%>
+
+<div class="integration-page-container">
+  <header class="page-title-block">
+    <div class="title-breadcrumbs">
+      <a href="/dashboard" class="breadcrumb-link">Workspace</a>
+      <span class="breadcrumb-sep">/</span>
+      <span class="breadcrumb-current">FHIR R4 Sandbox</span>
+    </div>
+    <div class="header-split-row">
+      <div class="header-text-group">
+        <h1 class="page-heading">FHIR R4 Sandbox</h1>
+        <p class="page-lead">Review the FHIR resources generated from clinician-verified clinical records.</p>
+      </div>
+      <div class="header-status-indicator">
+        <span class="status-indicator-pill live" title="Local FHIR bundle export is available">
+          <span class="status-pulse-dot"></span>
+          <span>Sandbox Connected</span>
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Integration Info Strip (Top Metric Cards with Refined Visual Hierarchy) -->
+  <section class="integration-summary-strip" aria-label="Integration Overview Metrics">
+    <!-- Card 1: HIS Endpoint -->
+    <div class="int-stat-box">
+      <span class="int-label">HIS Endpoint</span>
+      <div class="int-endpoint-input-wrapper">
+        <input type="text" class="endpoint-url-input" value="<%= endpointUrl %>" readonly aria-label="HIS FHIR Endpoint URL">
+        <span class="endpoint-badge-ok" title="Endpoint Status: 200 OK">
+          <span class="badge-dot-sm"></span>
+          <span>200 OK</span>
+        </span>
+      </div>
+      <span class="int-sub">FHIR R4 bundle export for the active workspace</span>
+    </div>
+
+    <!-- Card 2: Verified records available for bundle export -->
+    <div class="int-stat-box">
+      <span class="int-label">Verified Records Available</span>
+      <div class="int-metric-row">
+        <strong class="int-stat-number"><%= stats.verifiedCount %></strong>
+        <span class="int-stat-unit"><%= stats.verifiedCount === 1 ? 'Record verified' : 'Records verified' %></span>
+      </div>
+      <span class="int-sub">Available for on-demand FHIR bundle generation</span>
+    </div>
+
+    <!-- Card 3: Last Provenance Sync -->
+    <div class="int-stat-box">
+      <span class="int-label">Bundle Generation</span>
+      <div class="int-sync-row">
+        <strong class="int-sync-value"><%= lastSync %></strong>
+      </div>
+      <span class="int-sub live-sync">
+        <span class="pulse-dot-sm"></span>
+        <span>No external EHR connection is configured</span>
+      </span>
+    </div>
+  </section>
+
+  <!-- Section 1: FHIR R4 resource mappings -->
+  <section class="integration-section" aria-labelledby="headingFhirResources">
+    <div class="integration-section-header">
+      <div class="section-title-group">
+        <h2 class="integration-section-title" id="headingFhirResources">FHIR R4 Resource Mappings</h2>
+        <p class="integration-section-sub">Verified clinical data is mapped to FHIR resource shapes for sandbox bundle export.</p>
+      </div>
+      <a href="/api/fhir/patient/<%= (typeof patientId !== 'undefined' && patientId) ? patientId : '66e000000000000000000001' %>" target="_blank" class="btn btn-outline btn-sm btn-export-fhir" title="View sample patient bundle JSON in new tab">
+        <span>Sample Patient FHIR JSON</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+          <polyline points="15 3 21 3 21 9"></polyline>
+          <line x1="10" y1="14" x2="21" y2="3"></line>
+        </svg>
+      </a>
+    </div>
+
+    <!-- Clean white table card (NO outer box-in-box) -->
+    <div class="integration-table-card">
+      <div class="table-scroll-container">
+        <table class="integration-resources-table">
+          <thead>
+            <tr>
+              <th scope="col">Resource Name</th>
+              <th scope="col">FHIR Code</th>
+              <th scope="col">Status</th>
+              <th scope="col">Available Entries</th>
+              <th scope="col">Mapped Attributes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% (resources || []).forEach((res) => { %>
+              <tr class="resource-row">
+                <td><strong class="resource-name"><%= res.name %></strong></td>
+                <td><code class="resource-code"><%= res.code %></code></td>
+                <td>
+                  <span class="badge-resource-status active">
+                    <span class="status-dot"></span>
+                    <span><%= res.status %></span>
+                  </span>
+                </td>
+                <td>
+                  <div class="sync-count-cell">
+                    <strong class="sync-number"><%= res.count %></strong>
+                    <span class="sync-label"><%= res.count === 1 ? 'entry' : 'entries' %></span>
+                  </div>
+                </td>
+                <td class="resource-desc"><%= res.description %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 2: FHIR R4 Bundle Payload Shape (Direct on background) -->
+  <section class="integration-section" aria-labelledby="headingPayloadShape">
+    <div class="integration-section-header">
+      <div class="section-title-group">
+        <h2 class="integration-section-title" id="headingPayloadShape">FHIR R4 Bundle Payload Shape</h2>
+        <p class="integration-section-sub">Patient-specific resources are emitted only from authorized workspace endpoints.</p>
+      </div>
+    </div>
+
+    <!-- Sleek code card with embedded top-right Copy button and Syntax Highlighting -->
+    <div class="fhir-code-card">
+      <div class="code-card-header">
+        <div class="code-format-label">
+          <span class="format-badge">JSON</span>
+          <span class="format-schema">hl7.fhir.r4.core / Bundle</span>
+        </div>
+        <button type="button" class="btn-copy-code" id="btnCopyFhir" title="Copy FHIR JSON" aria-label="Copy FHIR JSON">
+          <svg class="copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          <span class="copy-label">Copy JSON</span>
+        </button>
+      </div>
+
+      <pre class="json-code-preview" id="fhirPreviewBlock"><code id="fhirCodeContent"><span class="json-punct">{</span>
+  <span class="json-key">"resourceType"</span>: <span class="json-string">"Bundle"</span>,
+  <span class="json-key">"id"</span>: <span class="json-string">"curaclinic-fhir-export-bundle"</span>,
+  <span class="json-key">"type"</span>: <span class="json-string">"collection"</span>,
+  <span class="json-key">"timestamp"</span>: <span class="json-string">"2026-09-21T04:45:00.000Z"</span>,
+  <span class="json-key">"meta"</span>: <span class="json-punct">{</span>
+    <span class="json-key">"lastUpdated"</span>: <span class="json-string">"2026-09-21T04:45:00.000Z"</span>,
+    <span class="json-key">"profile"</span>: <span class="json-punct">[</span>
+      <span class="json-string">"http://hl7.org/fhir/StructureDefinition/Bundle"</span>
+    <span class="json-punct">]</span>
+  <span class="json-punct">}</span>,
+  <span class="json-key">"entry"</span>: <span class="json-punct">[</span>
+    <span class="json-punct">{</span>
+      <span class="json-key">"fullUrl"</span>: <span class="json-string">"urn:uuid:patient-001"</span>,
+      <span class="json-key">"resource"</span>: <span class="json-punct">{</span>
+        <span class="json-key">"resourceType"</span>: <span class="json-string">"Patient"</span>,
+        <span class="json-key">"id"</span>: <span class="json-string">"66e000000000000000000001"</span>,
+        <span class="json-key">"active"</span>: <span class="json-bool">true</span>,
+        <span class="json-key">"name"</span>: <span class="json-punct">[</span><span class="json-punct">{</span> <span class="json-key">"use"</span>: <span class="json-string">"official"</span>, <span class="json-key">"family"</span>: <span class="json-string">"Sharma"</span>, <span class="json-key">"given"</span>: <span class="json-punct">[</span><span class="json-string">"Aarav"</span><span class="json-punct">]</span> <span class="json-punct">}</span><span class="json-punct">]</span>
+      <span class="json-punct">}</span>
+    <span class="json-punct">}</span>,
+    <span class="json-punct">{</span>
+      <span class="json-key">"fullUrl"</span>: <span class="json-string">"urn:uuid:med-req-001"</span>,
+      <span class="json-key">"resource"</span>: <span class="json-punct">{</span>
+        <span class="json-key">"resourceType"</span>: <span class="json-string">"MedicationRequest"</span>,
+        <span class="json-key">"status"</span>: <span class="json-string">"active"</span>,
+        <span class="json-key">"intent"</span>: <span class="json-string">"order"</span>,
+        <span class="json-key">"medicationCodeableConcept"</span>: <span class="json-punct">{</span> <span class="json-key">"text"</span>: <span class="json-string">"Metformin 500mg"</span> <span class="json-punct">}</span>
+      <span class="json-punct">}</span>
+    <span class="json-punct">}</span>
+  <span class="json-punct">]</span>
+<span class="json-punct">}</span></code></pre>
+    </div>
+  </section>
+</div>

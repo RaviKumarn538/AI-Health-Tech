@@ -1,0 +1,48 @@
+/*
+  Framework adapter layer.
+  Bootstrap, Bulma and Foundation are loaded for their maintained utility,
+  responsive and accessibility primitives. CuraClinic's component CSS remains
+  the final visual authority so the frameworks do not fight each other.
+
+  MUI is React-first and this application is server-rendered EJS. These tokens
+  mirror the MUI theme contract without injecting a React runtime into pages.
+*/
+:root,
+[data-mui-theme="light"] {
+  --mui-primary-main: #0056B3;
+  --mui-secondary-main: #0D9488;
+  --mui-success-main: #10B981;
+  --mui-background-default: #FFFFFF;
+  --mui-background-paper: #FFFFFF;
+  --mui-text-primary: #374151;
+  --mui-text-secondary: #6B7280;
+  --mui-divider: #E5E7EB;
+  --mui-shape-radius: 14px;
+  --mui-shadow-1: 0 8px 26px rgba(20, 55, 53, .055);
+}
+
+/* MUI-inspired semantic bridges for EJS-rendered surfaces. */
+.mui-surface {
+  background: var(--mui-background-paper);
+  border: 1px solid var(--mui-divider);
+  border-radius: var(--mui-shape-radius);
+  box-shadow: var(--mui-shadow-1);
+}
+
+.mui-primary-text { color: var(--mui-primary-main); }
+.mui-secondary-text { color: var(--mui-secondary-main); }
+.mui-success-text { color: var(--mui-success-main); }
+
+/* Framework utilities are deliberately namespaced where collisions are likely. */
+.app-main.container-fluid.grid-container {
+  max-width: 1380px;
+  padding-right: 0;
+  padding-left: 0;
+}
+
+@media (max-width: 700px) {
+  .app-main.container-fluid.grid-container {
+    padding-right: 0;
+    padding-left: 0;
+  }
+}

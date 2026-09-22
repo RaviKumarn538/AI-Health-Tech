@@ -1,0 +1,91 @@
+<% layout('/layouts/boilerplate') -%>
+
+<div class="settings-page-container">
+  <header class="page-title-block">
+    <div class="title-breadcrumbs">
+      <a href="/dashboard">Dashboard</a>
+      <span class="sep">/</span>
+      <span class="current">Clinic Settings</span>
+    </div>
+    <h1 class="page-heading">Clinic Settings</h1>
+    <p class="page-lead">Review the active clinic context, clinician account, workflow settings, and FHIR sandbox status.</p>
+  </header>
+
+  <div class="settings-grid">
+    <!-- Active Practice Workspace Card -->
+    <section class="panel-section-card">
+      <div class="section-header-row">
+        <div>
+          <h2 class="card-heading">Clinic Profile</h2>
+          <p class="card-sub">The selected workspace scopes patient documents, records, and audit entries.</p>
+        </div>
+        <span class="status-indicator-pill live">
+          <span class="pulse-dot"></span> <%= clinicDisplayName(currentClinic) %>
+        </span>
+      </div>
+
+      <div class="clinic-selection-list">
+        <% (clinics || [clinicName, "Sunrise Hospital", "Private Practice"]).forEach((c) => { %>
+          <form method="post" action="/settings/clinic" class="clinic-choice-form">
+            <input type="hidden" name="clinic" value="<%= c %>">
+            <input type="hidden" name="redirect" value="/settings">
+            <div class="clinic-card-option <%= c === currentClinic ? 'is-selected-clinic' : '' %>">
+              <div class="clinic-info-left">
+                <span class="clinic-building-icon">🏥</span>
+                <div>
+                  <strong class="clinic-choice-name"><%= clinicDisplayName(c) %></strong>
+                  <span class="clinic-type-sub">Demo facility context for scoped clinical data</span>
+                </div>
+              </div>
+              <div class="clinic-action-right">
+                <% if (c === currentClinic) { %>
+                  <span class="active-badge">Active Context</span>
+                <% } else { %>
+                  <button type="submit" class="btn btn-outline btn-sm">Switch Context</button>
+                <% } %>
+              </div>
+            </div>
+          </form>
+        <% }) %>
+      </div>
+    </section>
+
+    <!-- Clinician Account & Workflow Card -->
+    <section class="panel-section-card">
+      <div class="section-header-row">
+        <div>
+          <h2 class="card-heading">Clinician Account & Workflow</h2>
+          <p class="card-sub">Identity applied to verified records and provenance entries.</p>
+        </div>
+      </div>
+
+      <div class="settings-form-block">
+        <div class="form-group">
+          <label class="form-label">Signed-in Clinician</label>
+          <input type="text" class="form-input" value="<%= clinicianName %>" readonly>
+          <span class="form-hint">Identity is taken from the signed-in account.</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Integration</label>
+          <input type="text" class="form-input" value="FHIR R4 data-mapping sandbox" readonly>
+        </div>
+
+        <div class="compliance-feature-list">
+          <div class="feature-item">
+            <span class="check-icon">✓</span>
+            <span>Uploaded documents remain pending until a clinician verifies them.</span>
+          </div>
+          <div class="feature-item">
+            <span class="check-icon">✓</span>
+            <span>Approved records retain a version history when amended.</span>
+          </div>
+          <div class="feature-item">
+            <span class="check-icon">✓</span>
+            <span>Clinical source files are stored privately and are not served from the public web directory.</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>

@@ -1,0 +1,57 @@
+<% layout('/layouts/boilerplate') -%>
+
+<section class="clinical-auth-section" id="authSection">
+  <div class="auth-card-container">
+    <div class="auth-card-header">
+      <div class="auth-brand-pill">✚</div>
+      <h1 class="auth-title">Clinician Authentication</h1>
+      <p class="auth-subtitle">Secure access to the clinical documentation workstation.</p>
+    </div>
+
+    <% if (typeof signedOut !== 'undefined' && signedOut) { %>
+      <div class="clinical-flash flash-info" role="status">
+        <span class="flash-icon">ℹ</span>
+        <span class="flash-text">You have safely signed out of the clinical workstation.</span>
+      </div>
+    <% } %>
+
+    <% if (typeof error !== 'undefined' && error) { %>
+      <div class="clinical-flash flash-danger" role="alert">
+        <span class="flash-icon">⚠</span>
+        <span class="flash-text"><%= error %></span>
+      </div>
+    <% } %>
+
+    <% if (googleConfigured) { %>
+      <a class="btn-google-sso" href="/auth/google?next=<%= encodeURIComponent(typeof nextUrl !== 'undefined' ? nextUrl : '/dashboard') %>">
+        <svg class="google-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+          <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3h3.88c2.27-2.09 3.665-5.17 3.665-9.09z"/>
+          <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.26v3.09C3.26 21.36 7.36 24 12 24z"/>
+          <path fill="#FBBC05" d="M5.28 14.32c-.25-.72-.38-1.49-.38-2.32s.13-1.6.38-2.32V6.59H1.26C.46 8.18 0 9.99 0 12s.46 3.82 1.26 5.41l4.02-3.09z"/>
+          <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.36 0 3.26 2.64 1.26 6.59l4.02 3.09c.95-2.83 3.6-4.93 6.72-4.93z"/>
+        </svg>
+        <span>Sign in with Google</span>
+        <span class="btn-arrow">→</span>
+      </a>
+    <% } else { %>
+      <div class="sso-notice-box" role="alert">
+        <div class="sso-notice-title">
+          <span class="notice-icon">🔒</span>
+          <span>Google sign-in is not configured</span>
+        </div>
+        <p class="sso-notice-desc">Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI in the server environment, then restart the app.</p>
+      </div>
+    <% } %>
+
+    <div class="auth-security-footnote">
+      <div class="security-badges-row">
+        <span>🛡 Private document storage</span>
+        <span>·</span>
+        <span>FHIR R4 Sandbox</span>
+        <span>·</span>
+        <span>Clinician verification required</span>
+      </div>
+      <p class="security-disclaimer">AI outputs are decision-support drafts requiring clinician verification before becoming official medical records.</p>
+    </div>
+  </div>
+</section>

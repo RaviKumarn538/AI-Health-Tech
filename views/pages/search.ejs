@@ -1,0 +1,186 @@
+<% layout('/layouts/boilerplate') -%>
+
+<div class="advanced-search-cockpit">
+  <!-- Search Header Hero -->
+  <section class="search-header-hero">
+    <div class="search-hero-inner">
+      <h1 class="search-title">Clinical Records Search</h1>
+      <p class="search-subtitle">
+        Instant unified search across patient profiles, prescriptions, laboratory panels, and verified clinical documents.
+      </p>
+
+      <!-- Unified Global Search Status & Controls -->
+      <div class="unified-search-status-bar">
+        <div class="status-bar-left">
+          <div class="status-lens-badge" aria-hidden="true">🔍</div>
+          <div class="status-text-meta">
+            <% if (query) { %>
+              <div class="status-title-row">
+                <span class="status-pill-indicator">Active Query</span>
+                <strong class="status-query-text">"<%= query %>"</strong>
+                <span class="status-count-badge"><%= dsaResults ? dsaResults.total : 0 %> <%= (dsaResults && dsaResults.total === 1) ? 'result' : 'results' %></span>
+                <span class="status-speed-badge">in <%= dsaResults ? dsaResults.executionTimeMs : 0 %>ms</span>
+              </div>
+              <span class="status-hint-row">Synchronized live with the topbar Global Search bar</span>
+            <% } else { %>
+              <div class="status-title-row">
+                <strong class="status-query-text">Global Search Ready</strong>
+                <span class="status-pill-indicator">System-Wide</span>
+              </div>
+              <span class="status-hint-row">Use the topbar Global Search bar above or press <kbd>Ctrl+K</kbd> / <kbd>/</kbd> to search</span>
+            <% } %>
+          </div>
+        </div>
+
+        <div class="status-bar-right">
+          <button type="button" class="btn btn-primary btn-sm js-open-global-search" id="focusGlobalSearchActionBtn" title="Focus Global Search (Ctrl+K)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <span><%= query ? 'Edit Search Query' : 'Type in Global Search' %></span>
+            <kbd class="shortcut-kbd">Ctrl+K</kbd>
+          </button>
+          <% if (query) { %>
+            <a href="/search" class="btn btn-secondary btn-sm" title="Clear query">
+              <span>✕ Clear</span>
+            </a>
+          <% } %>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Main Search Workspace -->
+  <div class="search-content-workspace">
+    <% if (dsaResults && dsaResults.query) { %>
+      <!-- Natural Typo suggestion banner -->
+      <% if (dsaResults.suggestedQuery) { %>
+        <div class="typo-suggestion-banner">
+          <span class="typo-icon">💡</span>
+          <div class="typo-text">
+            <span>Did you mean: </span>
+            <a href="/search?q=<%= encodeURIComponent(dsaResults.suggestedQuery) %>&category=<%= category %>" class="suggested-link">
+              <strong><%= dsaResults.suggestedQuery %></strong>
+            </a>
+          </div>
+        </div>
+      <% } %>
+
+      <!-- Category Filter Tabs -->
+      <div class="category-tabs-row" role="tablist">
+        <a href="/search?q=<%= encodeURIComponent(query) %>&category=ALL" class="category-tab <%= category === 'ALL' ? 'is-active' : '' %>">
+          <span>All Results</span>
+          <span class="tab-count"><%= dsaResults.facets.ALL || 0 %></span>
+        </a>
+        <a href="/search?q=<%= encodeURIComponent(query) %>&category=PATIENT" class="category-tab <%= category === 'PATIENT' ? 'is-active' : '' %>">
+          <span>👥 Patients</span>
+          <span class="tab-count"><%= dsaResults.facets.PATIENT || 0 %></span>
+        </a>
+        <a href="/search?q=<%= encodeURIComponent(query) %>&category=MEDICATION" class="category-tab <%= category === 'MEDICATION' ? 'is-active' : '' %>">
+          <span>💊 Medications &amp; Rx</span>
+          <span class="tab-count"><%= dsaResults.facets.MEDICATION || 0 %></span>
+        </a>
+        <a href="/search?q=<%= encodeURIComponent(query) %>&category=LAB_TEST" class="category-tab <%= category === 'LAB_TEST' ? 'is-active' : '' %>">
+          <span>🧪 Lab Investigations</span>
+          <span class="tab-count"><%= dsaResults.facets.LAB_TEST || 0 %></span>
+        </a>
+        <a href="/search?q=<%= encodeURIComponent(query) %>&category=DOCUMENT" class="category-tab <%= category === 'DOCUMENT' ? 'is-active' : '' %>">
+          <span>📄 Documents</span>
+          <span class="tab-count"><%= dsaResults.facets.DOCUMENT || 0 %></span>
+        </a>
+        <a href="/search?q=<%= encodeURIComponent(query) %>&category=RECORD" class="category-tab <%= category === 'RECORD' ? 'is-active' : '' %>">
+          <span>🗂 Medical Records</span>
+          <span class="tab-count"><%= dsaResults.facets.RECORD || 0 %></span>
+        </a>
+      </div>
+
+      <!-- Results Grid -->
+      <div class="search-results-container">
+        <% if (dsaResults.results && dsaResults.results.length > 0) { %>
+          <div class="results-meta-header">
+            <span>Found <strong><%= dsaResults.results.length %></strong> clinical records for "<strong><%= query %></strong>"</span>
+          </div>
+
+          <div class="results-cards-grid">
+            <% dsaResults.results.forEach((item) => { %>
+              <div class="clinical-result-card <%= item.entityType.toLowerCase() %>">
+                <div class="result-card-top">
+                  <div class="result-badge-type <%= item.entityType.toLowerCase() %>">
+                    <% if (item.entityType === 'PATIENT') { %>👥 PATIENT<% } %>
+                    <% if (item.entityType === 'MEDICATION') { %>💊 MEDICATION<% } %>
+                    <% if (item.entityType === 'LAB_TEST') { %>🧪 LAB TEST<% } %>
+                    <% if (item.entityType === 'DOCUMENT') { %>📄 DOCUMENT<% } %>
+                    <% if (item.entityType === 'RECORD') { %>🗂 RECORD<% } %>
+                  </div>
+                </div>
+
+                <h3 class="result-card-title">
+                  <a href="<%= item.url %>"><%= item.title %></a>
+                </h3>
+                <p class="result-card-subtitle"><%= item.subtitle %></p>
+
+                <div class="result-card-footer">
+                  <span class="result-timestamp">Recorded <%= formatDate(item.createdAt, true) %></span>
+                  <a href="<%= item.url %>" class="btn-result-action">
+                    Open Record →
+                  </a>
+                </div>
+              </div>
+            <% }) %>
+          </div>
+        <% } else { %>
+          <!-- No Results State -->
+          <div class="no-results-state">
+            <div class="no-results-icon">🔎</div>
+            <h3>No clinical matches found for "<%= query %>"</h3>
+            <p>Try searching by patient MRN, medication name, or clinical diagnosis.</p>
+            <div class="search-suggestions-box">
+              <strong>Quick searches:</strong>
+              <div class="suggestion-chips">
+                <a href="/search?q=Paracetamol">Paracetamol</a>
+                <a href="/search?q=Metformin">Metformin</a>
+                <a href="/search?q=HbA1c">HbA1c</a>
+                <a href="/search?q=Hypertension">Hypertension</a>
+                <a href="/search?q=Viral">Viral infection</a>
+              </div>
+            </div>
+          </div>
+        <% } %>
+      </div>
+
+    <% } else { %>
+      <!-- Initial Landing State: Search Guidance for Clinicians -->
+      <div class="search-prompt-workspace">
+        <div class="prompt-card-grid">
+          <div class="prompt-feature-card">
+            <div class="feature-card-icon">👥</div>
+            <h4>Patients &amp; Demographics</h4>
+            <p>Locate patient profiles instantly by full name, registered mobile number, or Medical Record Number (MRN).</p>
+            <div class="sample-search-links">
+              <a href="/patients">Browse All Patients →</a>
+              <a href="/upload">Register via Clinical Upload →</a>
+            </div>
+          </div>
+
+          <div class="prompt-feature-card">
+            <div class="feature-card-icon">💊</div>
+            <h4>Medications &amp; Prescriptions</h4>
+            <p>Search active medications, dosages, frequencies, and doctor-verified prescriptions across all clinical encounters.</p>
+            <div class="sample-search-links">
+              <a href="/search?q=Paracetamol">Search "Paracetamol" →</a>
+              <a href="/search?q=Metformin">Search "Metformin" →</a>
+            </div>
+          </div>
+
+          <div class="prompt-feature-card">
+            <div class="feature-card-icon">🧪</div>
+            <h4>Lab Investigations &amp; Panels</h4>
+            <p>Query diagnostic parameters, reference ranges, and critical laboratory tests like Complete Blood Count and HbA1c.</p>
+            <div class="sample-search-links">
+              <a href="/search?q=Complete+Blood+Count">Search "Complete Blood Count" →</a>
+              <a href="/search?q=HbA1c">Search "HbA1c" →</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    <% } %>
+  </div>
+</div>

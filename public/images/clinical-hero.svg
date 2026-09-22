@@ -1,0 +1,79 @@
+<svg width="1200" height="820" viewBox="0 0 1200 820" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Clinical documentation workspace preview</title>
+  <desc id="desc">A calm clinical AI dashboard with patient context, structured notes, and review signals.</desc>
+  <defs>
+    <linearGradient id="canvas" x1="72" y1="36" x2="1100" y2="788" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#123B73"/>
+      <stop offset="0.5" stop-color="#0D9488"/>
+      <stop offset="1" stop-color="#10B981"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="390" y1="92" x2="934" y2="714" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#DFFCF1" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#DFFCF1" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="170%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="24" stdDeviation="24" flood-color="#061B3A" flood-opacity="0.3"/>
+    </filter>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="170%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="38"/>
+    </filter>
+  </defs>
+  <rect width="1200" height="820" rx="44" fill="url(#canvas)"/>
+  <circle cx="925" cy="135" r="235" fill="#DFFCF1" fill-opacity="0.17" filter="url(#soft)"/>
+  <circle cx="172" cy="735" r="250" fill="#0056B3" fill-opacity="0.34" filter="url(#soft)"/>
+  <path d="M0 602C242 506 362 692 588 623C824 550 936 346 1200 409V820H0V602Z" fill="url(#glow)" fill-opacity="0.3"/>
+
+  <g filter="url(#shadow)">
+    <rect x="92" y="80" width="1016" height="660" rx="25" fill="#F8FBFC"/>
+    <rect x="92" y="80" width="1016" height="66" rx="25" fill="#FFFFFF"/>
+    <path d="M92 121H1108V146H92V121Z" fill="#FFFFFF"/>
+    <circle cx="124" cy="113" r="6" fill="#10B981"/>
+    <circle cx="146" cy="113" r="6" fill="#0D9488"/>
+    <circle cx="168" cy="113" r="6" fill="#0056B3"/>
+    <text x="206" y="119" fill="#1E3A8A" font-family="Arial, sans-serif" font-size="18" font-weight="700">CuraClinic+</text>
+    <text x="874" y="118" fill="#6B7280" font-family="Arial, sans-serif" font-size="12" font-weight="700">CLINICIAN WORKSPACE</text>
+
+    <rect x="116" y="173" width="212" height="529" rx="15" fill="#F3F4F6"/>
+    <text x="142" y="211" fill="#0D9488" font-family="Arial, sans-serif" font-size="11" font-weight="700" letter-spacing="1.5">PATIENT CONTEXT</text>
+    <circle cx="165" cy="270" r="29" fill="#D1FAE5"/>
+    <path d="M155 273C155 266.925 159.925 262 166 262C172.075 262 177 266.925 177 273V278H155V273Z" fill="#0D9488"/>
+    <circle cx="166" cy="253" r="8" fill="#0D9488"/>
+    <text x="142" y="328" fill="#374151" font-family="Arial, sans-serif" font-size="16" font-weight="700">Clinical record</text>
+    <text x="142" y="352" fill="#6B7280" font-family="Arial, sans-serif" font-size="11">Longitudinal view</text>
+    <rect x="142" y="390" width="160" height="9" rx="4.5" fill="#D1D5DB"/>
+    <rect x="142" y="417" width="126" height="9" rx="4.5" fill="#D1D5DB"/>
+    <rect x="142" y="444" width="148" height="9" rx="4.5" fill="#D1D5DB"/>
+    <rect x="142" y="491" width="160" height="72" rx="12" fill="#FFFFFF"/>
+    <circle cx="162" cy="515" r="6" fill="#10B981"/>
+    <text x="178" y="519" fill="#374151" font-family="Arial, sans-serif" font-size="11" font-weight="700">3 verified records</text>
+    <text x="178" y="541" fill="#6B7280" font-family="Arial, sans-serif" font-size="10">Ready for review</text>
+
+    <rect x="353" y="173" width="731" height="529" rx="15" fill="#FFFFFF" stroke="#E5E7EB"/>
+    <text x="389" y="216" fill="#0056B3" font-family="Arial, sans-serif" font-size="12" font-weight="700" letter-spacing="1.4">REVIEWABLE INTELLIGENCE</text>
+    <text x="389" y="261" fill="#374151" font-family="Arial, sans-serif" font-size="29" font-weight="700">A clearer clinical story</text>
+    <text x="389" y="291" fill="#6B7280" font-family="Arial, sans-serif" font-size="13">Structured evidence, kept in the clinician’s hands.</text>
+    <rect x="389" y="333" width="327" height="154" rx="16" fill="#EFFAF2"/>
+    <text x="415" y="369" fill="#0D9488" font-family="Arial, sans-serif" font-size="11" font-weight="700" letter-spacing="1">CLINICAL SIGNAL</text>
+    <text x="415" y="407" fill="#374151" font-family="Arial, sans-serif" font-size="20" font-weight="700">Medication history</text>
+    <text x="415" y="437" fill="#6B7280" font-family="Arial, sans-serif" font-size="11">Extracted from the source record</text>
+    <rect x="415" y="458" width="100" height="8" rx="4" fill="#10B981"/>
+    <rect x="525" y="458" width="70" height="8" rx="4" fill="#A7F3D0"/>
+    <rect x="605" y="458" width="55" height="8" rx="4" fill="#D1FAE5"/>
+    <rect x="742" y="333" width="342" height="154" rx="16" fill="#F0F6FF"/>
+    <text x="768" y="369" fill="#0056B3" font-family="Arial, sans-serif" font-size="11" font-weight="700" letter-spacing="1">REVIEW QUEUE</text>
+    <text x="768" y="415" fill="#374151" font-family="Arial, sans-serif" font-size="38" font-weight="700">04</text>
+    <text x="832" y="414" fill="#6B7280" font-family="Arial, sans-serif" font-size="12">records waiting</text>
+    <rect x="768" y="445" width="242" height="8" rx="4" fill="#BFDBFE"/>
+    <rect x="768" y="445" width="174" height="8" rx="4" fill="#0056B3"/>
+    <text x="389" y="542" fill="#374151" font-family="Arial, sans-serif" font-size="14" font-weight="700">Evidence timeline</text>
+    <path d="M396 618C472 596 502 626 554 586C605 547 653 625 704 591C756 556 804 610 854 569C902 531 939 581 1016 547" stroke="#0D9488" stroke-width="5" stroke-linecap="round"/>
+    <path d="M396 618C472 596 502 626 554 586C605 547 653 625 704 591C756 556 804 610 854 569C902 531 939 581 1016 547" stroke="#10B981" stroke-width="2" stroke-linecap="round" stroke-dasharray="4 12"/>
+    <circle cx="554" cy="586" r="8" fill="#FFFFFF" stroke="#0D9488" stroke-width="4"/>
+    <circle cx="704" cy="591" r="8" fill="#FFFFFF" stroke="#10B981" stroke-width="4"/>
+    <circle cx="854" cy="569" r="8" fill="#FFFFFF" stroke="#0056B3" stroke-width="4"/>
+    <text x="389" y="669" fill="#9CA3AF" font-family="Arial, sans-serif" font-size="10">SOURCE</text>
+    <text x="563" y="669" fill="#9CA3AF" font-family="Arial, sans-serif" font-size="10">EXTRACT</text>
+    <text x="713" y="669" fill="#9CA3AF" font-family="Arial, sans-serif" font-size="10">REVIEW</text>
+    <text x="863" y="669" fill="#9CA3AF" font-family="Arial, sans-serif" font-size="10">VERIFY</text>
+  </g>
+</svg>

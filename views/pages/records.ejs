@@ -1,0 +1,166 @@
+<% layout('/layouts/boilerplate') -%>
+
+<div class="records-repository-container">
+  <!-- Repository Header -->
+  <header class="page-title-block">
+    <div class="title-breadcrumbs">
+      <a href="/dashboard">Dashboard</a>
+      <span class="sep">/</span>
+      <span class="current">Clinical Records</span>
+    </div>
+    <div class="header-split-row">
+      <div>
+        <h1 class="page-heading">Verified Clinical Records</h1>
+        <p class="page-lead">Searchable, immutable longitudinal health records with complete version histories.</p>
+      </div>
+      <div class="header-actions">
+        <a href="/upload" class="btn btn-primary">
+          <span class="btn-icon">+</span>
+          <span>Digitize New Record</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Filter Pills and Search Bar -->
+  <section class="repository-controls-card">
+    <div class="filter-pills-row">
+      <span class="filter-label">Filter:</span>
+      <div class="filter-pills-group">
+        <a href="/records?filter=ALL<%= search ? '&search=' + encodeURIComponent(search) : '' %>" 
+           class="filter-pill <%= !activeFilter || activeFilter === 'ALL' ? 'is-active' : '' %>">
+          All Records
+        </a>
+        <a href="/records?filter=APPROVED<%= search ? '&search=' + encodeURIComponent(search) : '' %>" 
+           class="filter-pill <%= activeFilter === 'APPROVED' ? 'is-active' : '' %>">
+          ✓ Approved
+        </a>
+        <a href="/records?filter=PENDING<%= search ? '&search=' + encodeURIComponent(search) : '' %>" 
+           class="filter-pill <%= activeFilter === 'PENDING' ? 'is-active' : '' %>">
+          ⏳ Pending Review
+        </a>
+        <a href="/records?filter=AMENDED<%= search ? '&search=' + encodeURIComponent(search) : '' %>" 
+           class="filter-pill <%= activeFilter === 'AMENDED' ? 'is-active' : '' %>">
+          ⟳ Amended (v2+)
+        </a>
+      </div>
+    </div>
+
+    <!-- Search in Records -->
+    <form method="get" action="/records" class="records-search-form">
+      <% if (activeFilter && activeFilter !== 'ALL') { %>
+        <input type="hidden" name="filter" value="<%= activeFilter %>">
+      <% } %>
+      <div class="search-field-box">
+        <span class="search-symbol">🔍</span>
+        <input 
+          type="search" 
+          name="search" 
+          value="<%= search || '' %>" 
+          placeholder="Search records by title, diagnosis, or doctor..." 
+          class="records-search-input"
+        >
+        <% if (search) { %>
+          <a href="/records<%= activeFilter ? '?filter=' + activeFilter : '' %>" class="clear-search-btn">Clear</a>
+        <% } %>
+        <button type="submit" class="btn btn-secondary btn-sm">Search</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- Records List Grid / Table -->
+  <section class="records-list-section">
+    <% if (!records || !records.length) { %>
+      <div class="empty-state-box">
+        <span class="empty-icon">🗂</span>
+        <h3>No clinical records found</h3>
+        <p>No records match the selected filter. Digitize a document or clear search filters.</p>
+        <a href="/records" class="btn btn-outline btn-sm">Reset Filters</a>
+      </div>
+    <% } else { %>
+      <div class="records-cards-grid">
+        <% records.forEach((rec) => { %>
+          <div class="record-card <%= rec.version > 1 ? 'has-amendments' : '' %>">
+            <div class="record-card-top">
+              <div class="record-type-pill-box">
+                <span class="record-type-tag"><%= prettyType(rec.recordType) %></span>
+                <% if (rec.version && rec.version > 1) { %>
+                  <span class="version-badge version-amended" title="Record has been amended">
+                    Version <%= rec.version %> of <%= rec.version %>
+                  </span>
+                <% } else { %>
+                  <span class="version-badge version-original">v1.0</span>
+                <% } %>
+              </div>
+
+              <% if (rec.doctorVerified) { %>
+                <span class="badge badge-success">
+                  <span class="status-dot"></span> Approved
+                </span>
+              <% } else { %>
+                <span class="badge badge-amber">
+                  <span class="status-dot"></span> Pending Review
+                </span>
+              <% } %>
+            </div>
+
+            <div class="record-card-body">
+              <h3 class="record-title">
+                <a href="/records/<%= rec._id %>"><%= rec.title || 'Clinical Record' %></a>
+              </h3>
+              
+              <div class="record-patient-meta">
+                <% if (rec.patient?._id) { %>
+                  <span class="patient-name-link">
+                    <a href="/patients/<%= rec.patient._id %>"><%= rec.patient.fullName || 'Patient' %></a>
+                  </span>
+                  <span class="bullet-sep">·</span>
+                  <span class="patient-mrn"><%= rec.patient.mrn || 'MRN' %></span>
+                <% } else { %>
+                  <span class="patient-name-link"><%= rec.patient?.fullName || 'Unassigned Patient' %></span>
+                <% } %>
+              </div>
+
+              <% if (rec.extractedData?.diagnosis) { %>
+                <div class="record-snippet-line">
+                  <span class="label">Diagnosis:</span>
+                  <span class="val"><%= rec.extractedData.diagnosis %></span>
+                </div>
+              <% } %>
+
+              <% if (rec.extractedData?.medications && rec.extractedData.medications.length) { %>
+                <div class="record-snippet-line">
+                  <span class="label">Prescription:</span>
+                  <span class="val">
+                    <%= rec.extractedData.medications.slice(0, 2).map((m) => m.name + (m.dosage ? ' ' + m.dosage : '')).join(', ') %>
+                    <% if (rec.extractedData.medications.length > 2) { %>
+                      <em>+<%= rec.extractedData.medications.length - 2 %> more</em>
+                    <% } %>
+                  </span>
+                </div>
+              <% } %>
+
+              <% if (rec.version > 1 && rec.amendmentReason) { %>
+                <div class="amendment-notice-box">
+                  <span class="amend-icon">✎</span>
+                  <span class="amend-text">Amendment: <em>"<%= rec.amendmentReason %>"</em></span>
+                </div>
+              <% } %>
+            </div>
+
+            <div class="record-card-footer">
+              <div class="signer-meta">
+                <span class="signer-name"><%= rec.verifiedByName || 'Clinician not recorded' %></span>
+                <span class="sign-date"><%= formatDate(rec.verifiedAt || rec.createdAt) %></span>
+              </div>
+              <a href="/records/<%= rec._id %>" class="btn btn-secondary btn-sm">
+                <span>View Details</span>
+                <span class="arrow-glyph">→</span>
+              </a>
+            </div>
+          </div>
+        <% }) %>
+      </div>
+    <% } %>
+  </section>
+</div>

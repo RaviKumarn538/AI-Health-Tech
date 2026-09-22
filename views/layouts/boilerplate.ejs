@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0E5A78">
+    <meta name="description" content="AI Clinical Records — Turn handwritten clinical documents into verified digital records.">
+    <title><%= pageTitle ? `${pageTitle} · ${clinicName}` : clinicName %></title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/clinic.css?v=23">
+  </head>
+  <body class="clinical-workstation-body">
+    <%- include("../includes/navbar") %>
+
+    <div class="clinical-app-shell">
+      <!-- Fixed Desktop Sidebar (240px) / Off-Canvas Mobile Drawer -->
+      <aside class="clinical-sidebar" id="clinicalSidebar" aria-label="Clinical Navigation">
+        <div class="mobile-sidebar-header">
+          <div class="sidebar-brand-lockup">
+            <span class="brand-pill-icon">✚</span>
+            <strong class="sidebar-brand-title"><%= clinicName %></strong>
+          </div>
+          <button type="button" class="sidebar-close-btn" id="sidebarCloseBtn" aria-label="Close navigation menu">✕</button>
+        </div>
+        <nav class="sidebar-menu" aria-label="Main Navigation">
+          <div class="sidebar-group-label">WORKSPACE</div>
+          <a class="sidebar-link nav-link <%= currentPath === '/dashboard' ? 'is-active active' : '' %>" href="/dashboard">
+            <span class="sidebar-icon">⊞</span>
+            <span class="sidebar-text">Overview</span>
+          </a>
+          <a class="sidebar-link nav-link <%= currentPath.startsWith('/patients') ? 'is-active active' : '' %>" href="/patients">
+            <span class="sidebar-icon">👥</span>
+            <span class="sidebar-text">Patients</span>
+          </a>
+          <a class="sidebar-link nav-link <%= currentPath.startsWith('/documents') ? 'is-active active' : '' %>" href="/documents">
+            <span class="sidebar-icon">📄</span>
+            <span class="sidebar-text">Documents</span>
+          </a>
+          <a class="sidebar-link nav-link <%= currentPath.startsWith('/review') ? 'is-active active' : '' %>" href="/review">
+            <span class="sidebar-icon">✓</span>
+            <span class="sidebar-text">Verification</span>
+          </a>
+          <a class="sidebar-link nav-link <%= currentPath.startsWith('/records') ? 'is-active active' : '' %>" href="/records">
+            <span class="sidebar-icon">🗂</span>
+            <span class="sidebar-text">Clinical Records</span>
+          </a>
+          <a class="sidebar-link nav-link <%= currentPath.startsWith('/audit') ? 'is-active active' : '' %>" href="/audit">
+            <span class="sidebar-icon">🛡</span>
+            <span class="sidebar-text">Audit Trail</span>
+          </a>
+          <a class="sidebar-link nav-link <%= currentPath.startsWith('/integration') ? 'is-active active' : '' %>" href="/integration">
+            <span class="sidebar-icon">⚡</span>
+            <span class="sidebar-text">Integration</span>
+          </a>
+
+          <div class="sidebar-divider"></div>
+
+          <div class="sidebar-group-label">CLINIC</div>
+          <a class="sidebar-link nav-link <%= currentPath.startsWith('/settings') ? 'is-active active' : '' %>" href="/settings">
+            <span class="sidebar-icon">⚙</span>
+            <span class="sidebar-text">Clinic Settings</span>
+          </a>
+        </nav>
+
+        <div class="sidebar-footer">
+
+          <div class="sidebar-meta-row">
+            <span class="sidebar-version-tag">FHIR R4 · Sandbox</span>
+            <div class="sidebar-legal-links">
+              <a href="/settings">Privacy</a>
+              <span>·</span>
+              <a href="/settings">Terms</a>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Main Content Viewport -->
+      <main class="clinical-viewport" id="mainContent">
+        <% if (flash) { %>
+          <div class="clinical-flash flash-<%= flash.type %>" role="alert">
+            <span class="flash-icon"><%= flash.type === 'success' ? '✓' : flash.type === 'danger' ? '⚠' : 'ℹ' %></span>
+            <span class="flash-text"><%= flash.message %></span>
+            <button type="button" class="flash-close" data-dismiss-flash aria-label="Dismiss">×</button>
+          </div>
+        <% } %>
+        <%- body %>
+      </main>
+    </div>
+
+    <!-- Mobile Drawer Overlay Backdrop -->
+    <div class="sidebar-backdrop" id="sidebarBackdrop" style="display: none;"></div>
+
+    <script src="/js/clinic.js?v=14"></script>
+  </body>
+</html>

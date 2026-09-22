@@ -1,0 +1,344 @@
+<% layout('/layouts/boilerplate') -%>
+
+<% 
+  const patient = record.patient || {};
+  const doc = record.document || {};
+  const currentVersion = record.version || 1;
+  const historyList = record.history || [];
+  const totalVersions = currentVersion;
+  const v1Snapshot = historyList.find((h) => h.version === 1) || (record.originalVersionSnapshot ? { extractedData: record.originalVersionSnapshot, modifiedAt: record.createdAt, modifiedByName: record.verifiedByName || 'Clinician' } : null);
+  const displayField = (value) => value && typeof value === 'object' && !Array.isArray(value) && Object.prototype.hasOwnProperty.call(value, 'value') ? value.value : value;
+  const diagnosisText = (value) => Array.isArray(value)
+    ? value.map((item) => displayField(item?.value ?? item)).filter((item) => item !== null && item !== undefined && String(item).trim()).join('; ')
+    : String(displayField(value) || '').trim();
+  const medicationValue = (medication, field) => displayField(medication?.[field]) || '';
+%>
+
+<div class="record-detail-container">
+  <!-- Detail Breadcrumbs & Header -->
+  <header class="page-title-block">
+    <div class="title-breadcrumbs">
+      <a href="/records">Clinical Records</a>
+      <span class="sep">/</span>
+      <span class="current"><%= record.title %></span>
+    </div>
+
+    <div class="header-split-row">
+      <div>
+        <div class="record-meta-chips">
+          <span class="type-pill"><%= prettyType(record.recordType) %></span>
+          <span class="version-chip <%= currentVersion > 1 ? 'amended' : '' %>">
+            Version <%= currentVersion %> of <%= totalVersions %>
+          </span>
+          <% if (record.doctorVerified) { %>
+            <span class="badge badge-success">✓ Doctor Verified</span>
+          <% } %>
+        </div>
+        <h1 class="page-heading"><%= record.title %></h1>
+        <p class="page-lead">
+          Patient: <strong><% if (patient?._id) { %><a href="/patients/<%= patient._id %>"><%= patient.fullName || 'Patient' %></a><% } else { %>Unassigned Patient<% } %></strong> 
+          (<%= patient.mrn || 'No MRN' %>) · Signed by <strong><%= record.verifiedByName || clinicianName %></strong> on <%= formatDate(record.verifiedAt || record.createdAt, true) %>
+        </p>
+      </div>
+
+      <div class="header-actions">
+        <% if (currentVersion > 1) { %>
+          <button type="button" class="btn btn-outline" id="btnToggleCompare">
+            <span class="btn-icon">⇆</span>
+            <span>Compare Versions</span>
+          </button>
+        <% } %>
+        <button type="button" class="btn btn-secondary" id="btnOpenAmendModal">
+          <span class="btn-icon">✎</span>
+          <span>Amend Record</span>
+        </button>
+        <% if (patient && patient._id) { %>
+          <a href="/api/fhir/patient/<%= patient._id %>" target="_blank" class="btn btn-outline" title="Export HL7 FHIR Bundle">
+            <span>FHIR R4 Bundle ↗</span>
+          </a>
+        <% } %>
+      </div>
+    </div>
+  </header>
+
+  <!-- Version Status Banner (if amended) -->
+  <% if (currentVersion > 1) { %>
+    <div class="amendment-alert-banner">
+      <div class="banner-icon">ℹ</div>
+      <div class="banner-body">
+        <strong>Clinical Amendment Notice (Version <%= currentVersion %> of <%= totalVersions %>)</strong>
+        <p>This record was amended on <strong><%= formatDate(record.verifiedAt || record.updatedAt, true) %></strong> by <strong><%= record.verifiedByName %></strong>.</p>
+        <div class="amendment-reason-quote">
+          <span class="quote-label">Mandatory Clinical Rationale:</span>
+          <em>"<%= record.amendmentReason || 'Reason not recorded.' %>"</em>
+        </div>
+      </div>
+      <div class="banner-actions">
+        <button type="button" class="btn btn-sm btn-secondary" id="btnViewV1">View Version 1</button>
+      </div>
+    </div>
+  <% } %>
+
+  <!-- Side-by-Side Version Comparison Drawer / View (Collapsible) -->
+  <% if (currentVersion > 1 && v1Snapshot) { %>
+    <section class="version-comparison-panel" id="versionComparisonPanel" style="display: none;">
+      <div class="panel-header-row">
+        <div class="panel-title-group">
+          <span class="diff-icon">⇆</span>
+          <h3>Version Comparison · Audit Integrity</h3>
+        </div>
+        <button type="button" class="btn-close-panel" id="btnCloseCompare">×</button>
+      </div>
+      <div class="diff-columns-grid">
+        <!-- Version 1 Column -->
+        <div class="diff-col version-old">
+          <div class="diff-col-header">
+            <h4>Version 1 (Original Sealed Record)</h4>
+            <span class="diff-date"><%= formatDate(v1Snapshot.modifiedAt) %> by <%= v1Snapshot.modifiedByName %></span>
+          </div>
+          <div class="diff-content">
+            <div class="diff-field">
+              <span class="field-title">Diagnosis:</span>
+              <p><%= diagnosisText(v1Snapshot.extractedData?.diagnosis) || 'Not documented in this version.' %></p>
+            </div>
+            <div class="diff-field">
+              <span class="field-title">Prescribed Medications:</span>
+              <ul class="med-diff-list">
+                <% (v1Snapshot.extractedData?.medications || []).forEach((m) => { %>
+                  <li>
+                    <strong class="med-name"><%= medicationValue(m, 'name') %></strong>
+                    <span class="med-dose strikethrough"><%= medicationValue(m, 'dosage') %></span>
+                    <span class="med-freq"><%= medicationValue(m, 'frequency') %></span>
+                  </li>
+                <% }) %>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Version 2 Column (Current) -->
+        <div class="diff-col version-current">
+          <div class="diff-col-header">
+            <h4>Version <%= currentVersion %> (Active Clinical Record)</h4>
+            <span class="diff-date"><%= formatDate(record.verifiedAt) %> by <%= record.verifiedByName %></span>
+          </div>
+          <div class="diff-content">
+            <div class="diff-field">
+              <span class="field-title">Diagnosis:</span>
+              <p><%= diagnosisText(record.extractedData?.diagnosis) || 'Not documented in the approved record.' %></p>
+            </div>
+            <div class="diff-field">
+              <span class="field-title">Prescribed Medications:</span>
+              <ul class="med-diff-list">
+                <% (record.extractedData?.medications || []).forEach((m) => { %>
+                  <li>
+                    <strong class="med-name"><%= medicationValue(m, 'name') %></strong>
+                    <span class="med-dose highlight-change"><%= medicationValue(m, 'dosage') %></span>
+                    <span class="med-freq"><%= medicationValue(m, 'frequency') %></span>
+                    <span class="changed-tag">Updated</span>
+                  </li>
+                <% }) %>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  <% } %>
+
+  <!-- Main Record Detail View -->
+  <div class="record-two-col-layout">
+    <!-- Left: Clinical Findings and Medication Schedule -->
+    <div class="col-main-record">
+      <div class="detail-card">
+        <h2 class="card-section-heading">Clinical Documentation Details</h2>
+
+        <div class="detail-group">
+          <span class="detail-label">DIAGNOSIS / CLINICAL IMPRESSION</span>
+          <p class="detail-value-large"><%= diagnosisText(record.extractedData?.diagnosis) || 'Not documented in the approved record.' %></p>
+        </div>
+
+        <% if (record.extractedData?.summary) { %>
+          <div class="detail-group">
+            <span class="detail-label">CLINICAL SUMMARY</span>
+            <p class="detail-text"><%= record.extractedData.summary %></p>
+          </div>
+        <% } %>
+
+        <!-- Active Medications Table -->
+        <div class="detail-group">
+          <span class="detail-label">PRESCRIBED MEDICATIONS</span>
+          <div class="table-responsive">
+            <table class="clinical-table">
+              <thead>
+                <tr>
+                  <th scope="col">Medication</th>
+                  <th scope="col">Dosage</th>
+                  <th scope="col">Frequency</th>
+                  <th scope="col">Instructions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% if (record.extractedData?.medications && record.extractedData.medications.length) { %>
+                  <% record.extractedData.medications.forEach((med) => { %>
+                    <tr>
+                        <td><strong><%= medicationValue(med, 'name') %></strong></td>
+                        <td><span class="dose-tag"><%= medicationValue(med, 'dosage') || '—' %></span></td>
+                        <td><%= medicationValue(med, 'frequency') || '—' %></td>
+                        <td class="text-muted"><%= medicationValue(med, 'instructions') || 'As advised' %></td>
+                    </tr>
+                  <% }) %>
+                <% } else { %>
+                  <tr>
+                    <td colspan="4" class="table-empty">No medications listed in this record.</td>
+                  </tr>
+                <% } %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <% if (record.verificationNotes) { %>
+          <div class="detail-group">
+            <span class="detail-label">PHYSICIAN NOTES</span>
+            <blockquote class="physician-notes-quote"><%= record.verificationNotes %></blockquote>
+          </div>
+        <% } %>
+      </div>
+
+      <!-- Preserved History & Version Timeline -->
+      <div class="detail-card audit-version-card">
+        <h3 class="card-section-heading">Preserved Version Audit History</h3>
+        <p class="card-lead-sub">Every update creates an immutable audit trail entry aligned with HL7 FHIR Provenance.</p>
+
+        <div class="timeline-version-list">
+          <!-- Current Active Version -->
+          <div class="version-timeline-node current-node">
+            <div class="node-marker">●</div>
+            <div class="node-body">
+              <div class="node-header">
+                <strong>Version <%= currentVersion %> of <%= totalVersions %> (Current Active)</strong>
+                <span class="node-time"><%= formatDate(record.verifiedAt || record.createdAt, true) %></span>
+              </div>
+              <p class="node-meta">Verified by <strong><%= record.verifiedByName %></strong> at <%= record.clinicName %></p>
+              <% if (record.amendmentReason) { %>
+                <div class="node-reason-pill">Reason: <%= record.amendmentReason %></div>
+              <% } %>
+            </div>
+          </div>
+
+          <!-- Historic Versions -->
+          <% historyList.slice().reverse().forEach((snap) => { %>
+            <div class="version-timeline-node history-node">
+              <div class="node-marker">○</div>
+              <div class="node-body">
+                <div class="node-header">
+                  <strong>Version <%= snap.version %> of <%= totalVersions %> (Preserved)</strong>
+                  <span class="node-time"><%= formatDate(snap.modifiedAt, true) %></span>
+                </div>
+                <p class="node-meta">Recorded by <strong><%= snap.modifiedByName %></strong></p>
+                <div class="node-reason-pill">Reason: <%= snap.reason %></div>
+              </div>
+            </div>
+          <% }) %>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Source Document Preview and Quick Patient Context -->
+    <div class="col-side-context">
+      <!-- Source Document Link Card -->
+      <div class="detail-card side-card">
+        <h3 class="side-card-heading">Original Clinical Source</h3>
+        <% if (doc.originalFilename) { %>
+          <p class="file-name-line">📄 <%= doc.originalFilename %></p>
+          <span class="file-type-badge"><%= prettyType(doc.documentType) %></span>
+          <div class="source-card-actions">
+            <% if (doc._id) { %>
+              <a href="/review/<%= doc._id %>" class="btn btn-secondary btn-sm btn-full">Open 3-Zone Viewer ↗</a>
+            <% } %>
+          </div>
+        <% } else { %>
+          <p class="text-muted">Directly digitized record.</p>
+        <% } %>
+      </div>
+
+      <!-- Patient Summary Card -->
+      <div class="detail-card side-card">
+        <h3 class="side-card-heading">Patient Profile</h3>
+        <div class="side-patient-block">
+          <strong class="side-patient-name"><%= patient.fullName %></strong>
+          <span class="side-patient-mrn"><%= patient.mrn %></span>
+          <div class="side-patient-traits">
+            <span>Age: <%= patient.age || '—' %></span> ·
+            <span>Gender: <%= patient.gender || '—' %></span> ·
+            <span>Blood: <%= patient.bloodGroup || '—' %></span>
+          </div>
+          <div class="side-allergies">
+            <span class="label">Allergies:</span>
+            <span class="val <%= patient.allergies ? 'text-amber' : '' %>"><%= patient.allergies || 'None documented' %></span>
+          </div>
+        </div>
+        <a href="/patients/<%= patient._id %>" class="btn btn-outline btn-sm btn-full">View Longitudinal Profile →</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Clinical Amendment Form (Mandatory Rationale Required) -->
+<div class="modal-dialog-backdrop" id="amendModalBackdrop" style="display: none;">
+  <div class="modal-dialog-window" role="dialog" aria-modal="true" aria-labelledby="amendModalTitle">
+    <div class="modal-dialog-header">
+      <h3 id="amendModalTitle">Clinical Record Amendment</h3>
+      <button type="button" class="btn-modal-close" id="btnCloseAmendModal">×</button>
+    </div>
+    
+    <form method="post" action="/records/<%= record._id %>/amend" class="modal-form">
+      <div class="modal-body">
+        <div class="modal-info-box">
+          <span class="info-icon">ℹ</span>
+          <p>Under medical governance regulations, amendments do not delete the original record. A new Version <%= currentVersion + 1 %> will be created, and Version <%= currentVersion %> will remain intact in the audit trail.</p>
+        </div>
+
+        <div class="form-group">
+          <label for="amendmentReasonInput" class="form-label">
+            Mandatory Clinical Reason <span class="required-mark">*</span>
+          </label>
+          <textarea 
+            name="amendmentReason" 
+            id="amendmentReasonInput" 
+            class="form-textarea" 
+            rows="3" 
+            placeholder="e.g. Dose adjusted from 500mg to 650mg TDS due to persistent fever spike..." 
+            required
+          ></textarea>
+        </div>
+
+        <% if (record.extractedData?.medications && record.extractedData.medications.length) { %>
+          <% const primeMed = record.extractedData.medications[0]; %>
+          <div class="form-group">
+            <label for="amendDose" class="form-label">Adjust Medication Dosage (<%= medicationValue(primeMed, 'name') %>)</label>
+            <input type="text" name="dosage" id="amendDose" class="form-input" value="<%= medicationValue(primeMed, 'dosage') %>">
+          </div>
+          <div class="form-group">
+            <label for="amendFreq" class="form-label">Frequency</label>
+            <input type="text" name="frequency" id="amendFreq" class="form-input" value="<%= medicationValue(primeMed, 'frequency') %>">
+          </div>
+        <% } %>
+
+        <div class="form-group">
+          <label for="amendNotes" class="form-label">Amendment Remarks</label>
+          <input type="text" name="notes" id="amendNotes" class="form-input" placeholder="Additional context for this version...">
+        </div>
+      </div>
+
+      <div class="modal-dialog-footer">
+        <button type="button" class="btn btn-outline" id="btnCancelAmend">Cancel</button>
+        <button type="submit" class="btn btn-primary">
+          <span>Create Version <%= currentVersion + 1 %></span>
+          <span class="arrow-glyph">→</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

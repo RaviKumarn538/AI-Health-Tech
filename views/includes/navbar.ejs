@@ -1,0 +1,118 @@
+<header class="clinical-topbar" role="banner">
+  <div class="topbar-left">
+    <button class="mobile-menu-toggle" id="mobileMenuToggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="3" y1="12" x2="21" y2="12"></line>
+        <line x1="3" y1="6" x2="21" y2="6"></line>
+        <line x1="3" y1="18" x2="21" y2="18"></line>
+      </svg>
+    </button>
+    <a class="topbar-brand" href="/dashboard" aria-label="AI Clinical Records Workspace">
+      <div class="brand-emblem">
+        <span class="brand-pill-icon">✚</span>
+      </div>
+      <div class="brand-text-block">
+        <div class="brand-title-row">
+          <strong class="brand-title logo"><%= clinicName %></strong>
+          <span class="brand-ai-badge">AI CLINICAL</span>
+        </div>
+      </div>
+    </a>
+  </div>
+
+  <div class="topbar-center">
+    <!-- Single Unified Global Search (Featured Exclusively on Topbar) -->
+    <div class="global-search-container" id="globalSearchContainer">
+      <div class="search-input-wrapper">
+        <svg class="search-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input 
+          type="search" 
+          id="globalSearchInput" 
+          class="global-search-input" 
+          placeholder="Search patients, records, documents..." 
+          autocomplete="off"
+          spellcheck="false"
+          aria-label="Global search across all clinical records, patients, medications, and labs">
+        <button type="button" class="search-clear-btn-topbar" id="globalSearchClearBtn" style="display: none;" title="Clear search query (Esc)" aria-label="Clear query">✕</button>
+        <div class="search-shortcut-capsule" aria-hidden="true" title="Keyboard shortcut: Ctrl+K or /">
+          <kbd class="kbd-mod">⌘</kbd><kbd class="kbd-key">K</kbd>
+        </div>
+        <button type="button" class="mobile-search-back-btn" id="mobileSearchBackBtn" aria-label="Close search (Esc)">✕</button>
+      </div>
+      <div class="search-results-dropdown" id="searchResultsDropdown" style="display: none;" role="listbox" aria-label="Global Search Results">
+        <!-- Live Category Filter Chips & Results injected dynamically via clinic.js -->
+      </div>
+    </div>
+  </div>
+
+  <div class="topbar-right">
+    <!-- Mobile Search Trigger Button -->
+    <button class="mobile-search-toggle js-open-global-search" id="mobileSearchToggle" type="button" aria-label="Open Global Search" title="Search">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+    </button>
+
+
+
+    <!-- Clinician Profile Dropdown or Sign In Actions -->
+    <% if (currentUser && currentUser.name) { %>
+      <div class="clinician-profile-dropdown">
+        <button class="profile-chip-btn" id="profileChipBtn" type="button" aria-haspopup="true" aria-expanded="false" title="Clinician Profile & Session">
+          <div class="clinician-avatar-wrapper">
+            <span class="clinician-avatar">
+              <%= ((currentUser.name || 'Doctor').replace(/^Dr\.\s*/i, '').split(/\s+/).filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase()) || 'DR' %>
+            </span>
+            <span class="clinician-online-indicator" title="Clinical Session Active"></span>
+          </div>
+          <div class="clinician-info">
+            <strong class="clinician-name"><%= currentUser.name %></strong>
+            <small class="clinician-role"><%= currentUser.role === 'ADMIN' ? 'Administrator' : 'Attending Physician' %></small>
+          </div>
+          <svg class="chevron-svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </button>
+        <div class="profile-menu-dropdown" id="profileMenuDropdown" style="display: none;">
+          <div class="dropdown-user-header">
+            <div class="user-meta-lockup">
+              <strong class="user-display-name"><%= currentUser.name %></strong>
+              <small class="user-email-tag"><%= currentUser.email || (currentUser.role === 'ADMIN' ? 'Clinic Administrator' : 'Attending Physician') %></small>
+            </div>
+          </div>
+          <div class="profile-menu-divider"></div>
+          <a class="profile-menu-item" href="/dashboard">
+            <span class="item-icon">⊞</span> Dashboard
+          </a>
+          <a class="profile-menu-item" href="/settings">
+            <span class="item-icon">⚙</span> Clinic Settings
+          </a>
+          <a class="profile-menu-item" href="/audit">
+            <span class="item-icon">🛡</span> Audit Trail &amp; Provenance
+          </a>
+          <a class="profile-menu-item" href="/login">
+            <span class="item-icon">⇄</span> Switch Clinician
+          </a>
+          <div class="profile-menu-divider"></div>
+          <form method="post" action="/logout" class="signout-form">
+            <button type="submit" class="profile-menu-item signout-item">
+              <span class="item-icon">↗</span> Sign Out
+            </button>
+          </form>
+        </div>
+      </div>
+    <% } else { %>
+      <div class="navbar-auth-actions">
+        <a class="btn-navbar-signin" href="/login">
+          <span class="signin-full-text">Clinician Sign In</span>
+          <span class="signin-short-text">Sign In</span>
+          <span class="signin-arrow">→</span>
+        </a>
+      </div>
+    <% } %>
+  </div>
+</header>

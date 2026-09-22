@@ -1,0 +1,132 @@
+<% layout('/layouts/boilerplate') -%>
+
+<div class="upload-page-container patient-match-page">
+  <header class="page-title-block">
+    <div class="title-breadcrumbs">
+      <a href="/dashboard">Dashboard</a>
+      <span class="sep">/</span>
+      <span class="current">Patient match</span>
+    </div>
+    <h1 class="page-heading">Confirm the patient before review</h1>
+    <p class="page-lead">The document is stored privately, but it is not attached to any chart yet. Confirm an authorized patient using the extracted identifiers below.</p>
+  </header>
+
+  <div class="upload-workspace-card">
+    <div class="panel-section-card">
+      <div class="section-header-row">
+        <div>
+          <h2 class="card-heading"><%= document.originalFilename %></h2>
+          <p class="card-sub">AI identifiers are matching signals only. They are not a clinical identity decision.</p>
+        </div>
+        <span class="badge badge-amber">Needs patient confirmation</span>
+      </div>
+      <div class="trends-summary-grid">
+        <% const extractedPatient = extraction?.structuredData?.patient || {}; %>
+        <div class="trend-summary-box"><strong>Name signal</strong><div class="trend-meta-sub"><%= extractedPatient.name?.value || 'Not detected' %></div></div>
+        <div class="trend-summary-box"><strong>MRN signal</strong><div class="trend-meta-sub"><%= extractedPatient.mrn?.value || 'Not detected' %></div></div>
+        <div class="trend-summary-box"><strong>Phone signal</strong><div class="trend-meta-sub"><%= extractedPatient.phone?.value || 'Not detected' %></div></div>
+      </div>
+    </div>
+
+    <!-- Option 1: Create New Patient Profile from Extracted Signals -->
+    <div class="panel-section-card" style="margin-top: 1.5rem; border: 1.5px solid var(--primary); background: var(--surface-soft);">
+      <div class="section-header-row">
+        <div>
+          <h2 class="card-heading" style="color: var(--navy); display: flex; align-items: center; gap: 0.5rem;">
+            <span>➕</span>
+            <span>Create New Patient Chart & Review</span>
+          </h2>
+          <p class="card-sub">Create a new clinical chart from the detected identifiers and immediately open the medication review workspace.</p>
+        </div>
+        <span class="badge badge-primary">Fast Track</span>
+      </div>
+
+      <form method="post" action="/documents/<%= document._id %>/match" class="create-patient-form">
+        <input type="hidden" name="action" value="create_new">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin: 1rem 0;">
+          <div>
+            <label class="form-label" style="font-weight: 600;">Full Name *</label>
+            <input type="text" name="newPatientName" class="form-select" value="<%= extractedPatient.name?.value || '' %>" placeholder="Patient Full Name" required>
+          </div>
+          <div>
+            <label class="form-label" style="font-weight: 600;">Phone Number</label>
+            <input type="text" name="newPatientPhone" class="form-select" value="<%= extractedPatient.phone?.value || '' %>" placeholder="e.g. 9425375340">
+          </div>
+          <div>
+            <label class="form-label" style="font-weight: 600;">Gender</label>
+            <select name="newPatientGender" class="form-select">
+              <option value="">Select gender...</option>
+              <option value="Male" <%= (extractedPatient.gender?.value || '').toLowerCase().startsWith('m') ? 'selected' : '' %>>Male</option>
+              <option value="Female" <%= (extractedPatient.gender?.value || '').toLowerCase().startsWith('f') ? 'selected' : '' %>>Female</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label" style="font-weight: 600;">Age</label>
+            <input type="number" name="newPatientAge" class="form-select" value="<%= extractedPatient.age?.value || '' %>" placeholder="e.g. 45">
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; margin-top: 1rem;">
+          <button type="submit" class="btn btn-primary" style="padding: 0.6rem 1.4rem; font-size: 0.95rem; font-weight: 600;">
+            <span>Create Patient & Open Clinical Review →</span>
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Option 2: Match to an Existing Patient -->
+    <form method="post" action="/documents/<%= document._id %>/match" class="upload-form" style="margin-top: 2rem;">
+      <div class="section-header-row">
+        <div>
+          <h2 class="card-heading">Or Match to Existing Patient Chart</h2>
+          <p class="card-sub">Choose only after checking the source document and the existing patient profile.</p>
+        </div>
+      </div>
+
+      <% if (!candidates.length && (!authorizedPatients || !authorizedPatients.length)) { %>
+        <div class="empty-state-box">
+          <h3>No existing patients in clinic database</h3>
+          <p>Use the "Create New Patient Chart & Review" option above to create a profile and view the extracted record.</p>
+        </div>
+      <% } else { %>
+        <% if (!candidates.length) { %>
+          <div class="empty-state-box">
+            <h3>No automatic candidate found</h3>
+            <p>Search is intentionally conservative. Select the correct patient from the full authorized list below.</p>
+          </div>
+        <% } else { %>
+          <div class="patient-match-list">
+            <% candidates.forEach((candidate, index) => { %>
+              <label class="patient-match-option">
+                <input type="radio" name="candidatePatient" value="<%= candidate._id %>" onchange="document.getElementById('selectedPatientId').value = this.value" <%= index === 0 ? 'checked' : '' %>>
+                <span>
+                  <strong><%= candidate.fullName %></strong>
+                  <small><%= candidate.mrn %> · <%= candidate.age || 'Age not recorded' %> · <%= candidate.gender || 'Gender not recorded' %></small>
+                  <small><%= candidate.matchReasons.join(' · ') || 'Authorized patient' %></small>
+                </span>
+                <b><%= candidate.matchScore %> signal</b>
+              </label>
+            <% }) %>
+          </div>
+        <% } %>
+
+        <% if (authorizedPatients && authorizedPatients.length) { %>
+          <label for="manualPatientId" class="form-label" style="margin-top: 1rem;">Choose from all authorized clinic patients</label>
+          <input type="hidden" name="patientId" id="selectedPatientId" value="<%= candidates[0]?._id || '' %>">
+          <select id="manualPatientId" class="form-select" onchange="document.getElementById('selectedPatientId').value = this.value">
+            <option value="">Select patient profile...</option>
+            <% authorizedPatients.forEach((candidate) => { %>
+              <option value="<%= candidate._id %>"><%= candidate.fullName %> · <%= candidate.mrn %></option>
+            <% }) %>
+          </select>
+
+          <div class="upload-submit-row">
+            <a href="/upload" class="btn btn-outline">Cancel</a>
+            <button type="submit" class="btn btn-secondary">Confirm Existing Patient & Review →</button>
+          </div>
+        <% } %>
+      <% } %>
+    </form>
+  </div>
+</div>

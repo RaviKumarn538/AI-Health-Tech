@@ -1,0 +1,197 @@
+<% layout('/layouts/boilerplate') -%>
+
+<div class="documents-workstation-container">
+  <!-- 1. Clean Page Header Bar -->
+  <header class="documents-page-header">
+    <div class="documents-header-intro">
+      <div class="title-breadcrumbs">
+        <a href="/dashboard">Dashboard</a>
+        <span class="sep">/</span>
+        <span class="current">Documents</span>
+      </div>
+      <div class="documents-title-row">
+        <h1 class="documents-view-title">Clinical Documents</h1>
+        <span class="documents-count-badge">
+          <%= documents.length === 1 ? '1 document' : `${documents.length} documents` %>
+        </span>
+      </div>
+      <p class="documents-view-subtext">Manage, inspect, and verify ingested clinical documents and extraction statuses</p>
+    </div>
+
+    <div class="documents-header-actions">
+      <a class="btn btn-primary btn-upload-entry" href="/upload">
+        <span class="btn-icon" aria-hidden="true">+</span>
+        <span>Upload Record</span>
+      </a>
+    </div>
+  </header>
+
+  <!-- 2. Modern Inline Filter & Search Toolbar (No Big White Box, Sits cleanly on background) -->
+  <section class="documents-filter-toolbar" aria-label="Document Filters">
+    <form method="get" action="/documents" class="documents-inline-filter-form">
+      <div class="filter-controls-cluster">
+        <!-- Modern Select: Document Type -->
+        <div class="modern-select-wrapper">
+          <label for="filterTypeSelect" class="modern-select-label">Type</label>
+          <div class="select-input-container">
+            <select name="type" id="filterTypeSelect" class="modern-filter-select" onchange="this.form.submit()">
+              <option value="ALL" <%= filterType === 'ALL' ? 'selected' : '' %>>All Types</option>
+              <option value="PRESCRIPTION" <%= filterType === 'PRESCRIPTION' ? 'selected' : '' %>>Prescriptions</option>
+              <option value="OPD_CARD" <%= filterType === 'OPD_CARD' ? 'selected' : '' %>>OPD Cards</option>
+              <option value="CASE_SHEET" <%= filterType === 'CASE_SHEET' ? 'selected' : '' %>>Case Sheets</option>
+              <option value="LAB_REPORT" <%= filterType === 'LAB_REPORT' ? 'selected' : '' %>>Lab Reports</option>
+              <option value="DISCHARGE_SUMMARY" <%= filterType === 'DISCHARGE_SUMMARY' ? 'selected' : '' %>>Discharge Summaries</option>
+            </select>
+            <svg class="select-chevron-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Modern Select: Verification Status -->
+        <div class="modern-select-wrapper">
+          <label for="filterStatusSelect" class="modern-select-label">Status</label>
+          <div class="select-input-container">
+            <select name="status" id="filterStatusSelect" class="modern-filter-select" onchange="this.form.submit()">
+              <option value="ALL" <%= filterStatus === 'ALL' ? 'selected' : '' %>>All Statuses</option>
+              <option value="APPROVED" <%= filterStatus === 'APPROVED' ? 'selected' : '' %>>Clinician Verified</option>
+              <option value="NEEDS_VERIFICATION" <%= filterStatus === 'NEEDS_VERIFICATION' ? 'selected' : '' %>>Needs Review</option>
+            </select>
+            <svg class="select-chevron-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Sleek Search Input with embedded SVG Icon -->
+        <div class="documents-search-wrapper">
+          <svg class="search-input-svg-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input 
+            type="search" 
+            name="search" 
+            value="<%= searchQuery || '' %>" 
+            placeholder="Search documents by filename..." 
+            class="documents-primary-search-input"
+            autocomplete="off"
+            spellcheck="false"
+            aria-label="Search documents by filename"
+          >
+          <% if (searchQuery) { %>
+            <a href="/documents?type=<%= filterType %>&status=<%= filterStatus %>" class="search-clear-cross" title="Clear search query" aria-label="Clear query">✕</a>
+          <% } %>
+        </div>
+
+        <button type="submit" class="btn btn-secondary btn-sleek-filter">Filter</button>
+        <% if (filterType !== 'ALL' || filterStatus !== 'ALL' || searchQuery) { %>
+          <a href="/documents" class="btn btn-ghost btn-sm btn-clear-all-filters">Reset</a>
+        <% } %>
+      </div>
+    </form>
+  </section>
+
+  <!-- 3. Documents Clinical Table View -->
+  <section class="documents-table-card" aria-label="Clinical Documents Table">
+    <div class="table-responsive">
+      <table class="clinical-table docs-clinical-table">
+        <thead>
+          <tr>
+            <th scope="col" class="th-doc-title">DOCUMENT</th>
+            <th scope="col" class="th-patient">PATIENT</th>
+            <th scope="col" class="th-type">TYPE</th>
+            <th scope="col" class="th-status">STATUS</th>
+            <th scope="col" class="th-time">INGESTED</th>
+            <th scope="col" class="th-actions">ACTIONS</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (!documents || !documents.length) { %>
+            <tr>
+              <td colspan="6" class="table-empty">
+                <div class="table-empty-inner">
+                  <span class="empty-icon-glyph">📄</span>
+                  <p class="empty-main-text">No clinical documents match the selected filters.</p>
+                  <% if (filterType !== 'ALL' || filterStatus !== 'ALL' || searchQuery) { %>
+                    <a href="/documents" class="btn btn-secondary btn-sm">Clear Filters</a>
+                  <% } else { %>
+                    <a href="/upload" class="btn btn-primary btn-sm">+ Upload Clinical Document</a>
+                  <% } %>
+                </div>
+              </td>
+            </tr>
+          <% } else { %>
+            <% documents.forEach((doc) => { %>
+              <% 
+                const patientName = toTitleCase(doc.patient?.fullName) || 'Unknown Patient';
+                const patientMrn = doc.patient?.mrn || 'Unassigned';
+                const docId = `DOC-${String(doc._id).slice(-6)}`;
+                const isImage = /\.(jpe?g|png|webp)$/i.test(doc.originalFilename || '');
+              %>
+              <tr>
+                <td>
+                  <div class="doc-identifier-cell">
+                    <div class="doc-crisp-icon-box" title="<%= isImage ? 'Image Document' : 'PDF Document' %>">
+                      <% if (isImage) { %>
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                          <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                          <polyline points="21 15 16 10 5 21"></polyline>
+                        </svg>
+                      <% } else { %>
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                          <polyline points="14 2 14 8 20 8"></polyline>
+                          <line x1="16" y1="13" x2="8" y2="13"></line>
+                          <line x1="16" y1="17" x2="8" y2="17"></line>
+                        </svg>
+                      <% } %>
+                    </div>
+                    <div class="doc-text-meta">
+                      <strong class="doc-filename-link" title="<%= doc.originalFilename %>"><%= doc.originalFilename %></strong>
+                      <span class="doc-sub-id"><%= docId %></span>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <div class="doc-table-patient-cell">
+                    <strong class="doc-table-patient-name"><%= patientName %></strong>
+                    <span class="doc-table-mrn-badge"><%= patientMrn %></span>
+                  </div>
+                </td>
+                <td>
+                  <span class="doc-type-pill"><%= prettyType(doc.documentType) %></span>
+                </td>
+                <td>
+                  <% if (isDocumentApproved(doc)) { %>
+                    <span class="badge badge-success">
+                      <span class="status-dot"></span> Approved
+                    </span>
+                  <% } else if (isDocumentPendingReview(doc)) { %>
+                    <span class="badge badge-amber">
+                      <span class="status-dot"></span> Needs Review
+                    </span>
+                  <% } else { %>
+                    <span class="badge badge-slate">
+                      <span class="status-dot"></span> <%= prettyType(doc.status) %>
+                    </span>
+                  <% } %>
+                </td>
+                <td>
+                  <time class="doc-table-time" datetime="<%= safeIsoDate(doc.createdAt) %>"><%= formatDate(doc.createdAt) %></time>
+                </td>
+                <td class="td-actions">
+                  <a href="/review/<%= doc._id %>" class="btn btn-secondary btn-sm doc-action-btn" title="Open verification workspace">
+                    <span><%= isDocumentApproved(doc) ? 'View Record' : 'Review' %></span>
+                    <span class="arrow-glyph">→</span>
+                  </a>
+                </td>
+              </tr>
+            <% }) %>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>

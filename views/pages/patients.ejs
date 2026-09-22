@@ -1,0 +1,163 @@
+<% layout('/layouts/boilerplate') -%>
+
+<div class="patients-workstation-container">
+  <!-- 1. Consolidated App-Like Header Bar & Search Controls -->
+  <header class="patients-view-header">
+    <div class="patients-header-intro">
+      <div class="patients-heading-row">
+        <h1 class="patients-view-title">Patient Directory</h1>
+        <span class="patients-total-badge">
+          <%= patients.length === 1 ? '1 profile' : `${patients.length} profiles` %>
+        </span>
+      </div>
+      <p class="patients-view-subtext">Active longitudinal patient charts and clinical documentation history</p>
+    </div>
+
+    <div class="patients-header-actions">
+      <!-- Consolidated Inline Search Bar -->
+      <form class="patients-search-form" method="get" action="/patients" role="search">
+        <div class="patients-search-input-wrap">
+          <svg class="patients-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input 
+            type="search" 
+            name="search" 
+            class="patients-search-input"
+            value="<%= search %>" 
+            placeholder="Search patients by name or MRN..." 
+            autocomplete="off"
+            spellcheck="false"
+            aria-label="Search patients by name or MRN">
+          <% if (search) { %>
+            <a href="/patients" class="patients-search-clear" title="Clear search" aria-label="Clear query">✕</a>
+          <% } %>
+        </div>
+        <button type="submit" class="btn btn-secondary btn-patients-search">Search</button>
+      </form>
+
+      <!-- Single Primary Action -->
+      <a class="btn btn-primary btn-upload-entry" href="/upload">
+        <span class="btn-icon" aria-hidden="true">+</span>
+        <span>Upload Record</span>
+      </a>
+    </div>
+  </header>
+
+  <!-- 2. Patient Directory Grid View -->
+  <section class="patients-directory-section" aria-label="Patient Directory List">
+    <% if (!patients.length) { %>
+      <div class="patients-empty-card">
+        <div class="patients-empty-icon-wrap" aria-hidden="true">👥</div>
+        <h2 class="patients-empty-title"><%= search ? `No patients match "${search}"` : 'No patient records found' %></h2>
+        <p class="patients-empty-desc">
+          <%= search 
+            ? 'Try searching with a different name spelling, MRN code, or clear the search filter.' 
+            : 'Upload a prescription, lab report, or OPD card to automatically establish a patient chart.' %>
+        </p>
+        <div class="patients-empty-actions">
+          <% if (search) { %>
+            <a href="/patients" class="btn btn-secondary btn-sm">Clear Search Filter</a>
+          <% } else { %>
+            <a href="/upload" class="btn btn-primary btn-sm">+ Upload Clinical Document</a>
+          <% } %>
+        </div>
+      </div>
+    <% } else { %>
+      <div class="patients-card-grid">
+        <% patients.forEach((patient) => { %>
+          <% 
+            const rawAllergies = String(patient.allergies || '').trim();
+            const lowerAllergies = rawAllergies.toLowerCase();
+            const hasDocumentedAllergy = Boolean(
+              rawAllergies && 
+              !['none', 'none documented', 'no known allergies', 'no allergies', 'nil', 'n/a', '-', '--'].includes(lowerAllergies)
+            );
+
+            // Robust uppercase 2-letter initials
+            const initials = (patient.fullName || 'Patient')
+              .trim()
+              .split(/\s+/)
+              .filter(Boolean)
+              .map((n) => n[0])
+              .join('')
+              .slice(0, 2)
+              .toUpperCase() || 'PT';
+
+            // Clean Title Case name
+            const displayName = toTitleCase(patient.fullName) || 'Unknown Patient';
+
+            // Clean fallback for Age (no dashes)
+            let ageDisplay = 'Age unrecorded';
+            if (patient.age && !isNaN(patient.age) && Number(patient.age) > 0) {
+              ageDisplay = `${patient.age} yrs`;
+            }
+
+            // Gender & Blood Group fallbacks
+            const genderDisplay = patient.gender && patient.gender.trim() ? patient.gender.trim() : 'Gender unrecorded';
+            const bloodDisplay = patient.bloodGroup && patient.bloodGroup.trim() ? patient.bloodGroup.trim() : 'Blood group unrecorded';
+          %>
+          <a class="patient-directory-card" href="/patients/<%= patient._id %>" aria-label="Open medical chart for <%= displayName %>">
+            <!-- Card Top: Avatar, MRN Badge, Arrow -->
+            <div class="patient-card-top-bar">
+              <div class="patient-avatar-badge" aria-hidden="true">
+                <span class="patient-avatar-text"><%= initials %></span>
+              </div>
+              <span class="patient-mrn-pill"><%= patient.mrn || 'Unassigned' %></span>
+              <span class="patient-arrow-icon" aria-hidden="true">↗</span>
+            </div>
+
+            <!-- Patient Name & Demographics -->
+            <div class="patient-card-info">
+              <h2 class="patient-name-heading"><%= displayName %></h2>
+              <p class="patient-meta-details">
+                <span class="meta-item"><%= ageDisplay %></span>
+                <span class="meta-bullet">·</span>
+                <span class="meta-item"><%= genderDisplay %></span>
+                <span class="meta-bullet">·</span>
+                <span class="meta-item"><%= bloodDisplay %></span>
+              </p>
+            </div>
+
+            <!-- Proportional Stats Row (No oversized teal numbers) -->
+            <div class="patient-stats-strip">
+              <div class="patient-stat-capsule">
+                <span class="stat-capsule-label">Documents:</span>
+                <strong class="stat-capsule-val"><%= patient.counts.documents %></strong>
+              </div>
+
+              <% if (patient.counts.alerts > 0) { %>
+                <div class="patient-stat-capsule stat-has-alert">
+                  <span class="alert-pulse-dot" aria-hidden="true"></span>
+                  <span class="stat-capsule-label">Alerts:</span>
+                  <strong class="stat-capsule-val"><%= patient.counts.alerts %></strong>
+                </div>
+              <% } else { %>
+                <div class="patient-stat-capsule">
+                  <span class="stat-capsule-label">Alerts:</span>
+                  <strong class="stat-capsule-val">0</strong>
+                </div>
+              <% } %>
+            </div>
+
+            <!-- Card Footer: Semantic Allergy Badge (Neutral Gray for None, Alert for Real) -->
+            <div class="patient-card-footer-row">
+              <span class="footer-allergy-label">Allergies:</span>
+              <% if (hasDocumentedAllergy) { %>
+                <span class="patient-allergy-tag allergy-danger-alert" title="Documented clinical allergy risk">
+                  <span class="allergy-icon" aria-hidden="true">⚠</span>
+                  <strong class="allergy-name"><%= rawAllergies %></strong>
+                </span>
+              <% } else { %>
+                <span class="patient-allergy-tag allergy-neutral-safe" title="No clinical allergies documented">
+                  <%= rawAllergies || 'None documented' %>
+                </span>
+              <% } %>
+            </div>
+          </a>
+        <% }) %>
+      </div>
+    <% } %>
+  </section>
+</div>
