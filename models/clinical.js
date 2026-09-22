@@ -199,6 +199,8 @@ const documentSchema = new Schema(
     cloudinary: {
       assetId: { type: String, default: "", index: true },
       publicId: { type: String, default: "", index: true },
+      secureUrl: { type: String, default: "" }, // HTTPS delivery URL (primary)
+      url: { type: String, default: "" },        // HTTP delivery URL (fallback)
       resourceType: { type: String, default: "" },
       deliveryType: { type: String, default: "authenticated" },
       version: { type: Number, default: null },

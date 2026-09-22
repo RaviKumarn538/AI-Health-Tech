@@ -1086,8 +1086,8 @@ app.get("/review/:id", asyncHandler(async (req, res) => {
     ...sourceDocument,
     sourceAvailable: Boolean(
       resolvePrivateDocumentPath(sourceDocument)
-      || sourceDocument.cloudinary?.secureUrl
-      || sourceDocument.cloudinary?.url
+      || (sourceDocument.cloudinary?.secureUrl && sourceDocument.cloudinary.secureUrl.startsWith('http'))
+      || (sourceDocument.cloudinary?.url && sourceDocument.cloudinary.url.startsWith('http'))
     ),
     sourcePreviewType: sourceDocument.fileType === "application/pdf" || /\.pdf$/i.test(sourceDocument.originalFilename || "")
       ? "pdf"
@@ -1114,11 +1114,18 @@ app.get("/documents/:id/file", asyncHandler(async (req, res) => {
   }
   const sourcePath = resolvePrivateDocumentPath(document);
   if (sourcePath && fs.existsSync(sourcePath)) {
+    // Infer Content-Type from file extension for correct browser rendering
+    const ext = path.extname(sourcePath).toLowerCase();
+    const mimeMap = { ".pdf": "application/pdf", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp" };
+    const mimeType = mimeMap[ext] || document.fileType || "application/octet-stream";
+    res.setHeader("Content-Type", mimeType);
     res.setHeader("X-Content-Type-Options", "nosniff");
     return res.sendFile(sourcePath, { headers: { "Content-Disposition": `inline; filename="${encodeURIComponent(document.originalFilename || 'clinical-record')}"` } });
   }
-  if (document.cloudinary?.secureUrl || document.cloudinary?.url) {
-    return res.redirect(document.cloudinary.secureUrl || document.cloudinary.url);
+  // Cloudinary fallback — only redirect if URL is a real HTTP URL, not an empty string
+  const cloudinaryUrl = document.cloudinary?.secureUrl || document.cloudinary?.url || "";
+  if (cloudinaryUrl.startsWith("http")) {
+    return res.redirect(cloudinaryUrl);
   }
   return res.status(404).send("Clinical source file is not available.");
 }));

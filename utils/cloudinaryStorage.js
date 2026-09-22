@@ -92,6 +92,8 @@ async function uploadClinicalDocument(file, { clinic = "CuraClinic AI", doctorId
   return {
     assetId: payload.asset_id,
     publicId: payload.public_id,
+    secureUrl: payload.secure_url || "",  // HTTPS delivery URL — used by sourceAvailable check
+    url: payload.url || "",              // HTTP delivery URL — fallback
     resourceType: payload.resource_type || "raw",
     deliveryType: payload.type || "authenticated",
     version: Number(payload.version || 0) || null,

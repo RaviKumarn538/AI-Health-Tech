@@ -919,7 +919,8 @@
       } else if (genericInput) {
         genericInput.value = aiVal;
       }
-      updateFieldState(activeSelectedCard, 'clinician_verified', oldVal, aiVal);
+      const acceptedValue = section === 'investigation' ? (activeSelectedCard.dataset.value || '') : aiVal;
+      updateFieldState(activeSelectedCard, 'clinician_verified', oldVal, acceptedValue);
 
       syncPayloadInputs();
       selectEntityCard(activeSelectedCard);

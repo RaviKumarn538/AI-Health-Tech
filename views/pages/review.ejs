@@ -131,6 +131,7 @@
                 src="/documents/<%= document._id %>/file"
                 title="Source clinical document: <%= document.originalFilename %>"
                 class="source-document-pdf"
+                onerror="document.getElementById('sourceUnavailable').style.display='flex';this.style.display='none';"
               ></iframe>
             <% } else { %>
               <img
@@ -139,12 +140,15 @@
                 id="sourceDocumentImage"
                 class="source-document-image"
                 loading="eager"
+                onerror="document.getElementById('sourceUnavailable').style.removeProperty('display');this.style.display='none';"
               >
             <% } %>
           <% } %>
           <div class="source-unavailable" id="sourceUnavailable" style="<%= document.sourceAvailable ? 'display:none;' : '' %>">
+            <div class="unavailable-icon">🗂️</div>
             <strong>Original source unavailable</strong>
-            <p>The source file could not be located in private storage or cloud storage.</p>
+            <p>The source file <em><%= document.originalFilename %></em> could not be located in private storage or cloud storage.</p>
+            <p class="unavailable-hint">This document was likely uploaded on a different server or device. The AI-extracted data and clinical fields below remain available for verification.</p>
           </div>
 
           <!-- Overlay Layer for Bounding Box Highlights -->
@@ -390,7 +394,7 @@
                 const pAgeValue = displayValue(pAge);
                 const pAgeScore = Math.round(Number(pAge.confidence || 0) * 100);
               %>
-              <div 
+              <div
                 class="entity-item-card compact" 
                 data-entity-id="patient-age"
                 data-section="patient"
@@ -417,7 +421,7 @@
                 const pGenValue = displayValue(pGen);
                 const pGenScore = Math.round(Number(pGen.confidence || 0) * 100);
               %>
-              <div 
+              <div
                 class="entity-item-card compact" 
                 data-entity-id="patient-gender"
                 data-section="patient"
@@ -1026,7 +1030,7 @@
                   <span>Save Draft</span>
                 </button>
                 <button type="submit" class="btn btn-primary btn-approve-final" id="btnApproveFinal">
-                  <span>✓ Approve &amp; Lock Record</span>
+                  <span>✓</span><span>Approve &amp; Lock Record</span>
                 </button>
               <% } else { %>
                 <div class="locked-banner">
