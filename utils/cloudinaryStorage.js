@@ -8,6 +8,10 @@ const API_SECRET = String(process.env.CLOUDINARY_API_SECRET || "").trim();
 const CLINICAL_PRESET = String(process.env.CLOUDINARY_CLINICAL_PRESET || "").trim();
 const REQUEST_TIMEOUT_MS = Number(process.env.CLOUDINARY_REQUEST_TIMEOUT_MS || 45_000);
 
+// Signed URL expiry: 5 minutes — short enough to prevent link sharing,
+// long enough for a browser to fully load the image/PDF after redirect.
+const SIGNED_URL_TTL_SECONDS = 5 * 60;
+
 function isCloudinaryConfigured() {
   return Boolean(CLOUD_NAME && API_KEY && API_SECRET);
 }
@@ -51,6 +55,50 @@ function cloudinaryError(payload, status) {
   return new Error(message.slice(0, 700));
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// generateSignedDeliveryUrl
+//
+// Generates a short-lived SIGNED URL for an "authenticated" Cloudinary asset.
+//
+// WHY THIS MATTERS:
+//   • Authenticated Cloudinary assets are NOT publicly accessible.
+//     Even if someone knows the publicId, they cannot access the file without
+//     a valid server-generated signature using API_SECRET.
+//   • Signed URLs expire after SIGNED_URL_TTL_SECONDS (5 min by default).
+//     This prevents URL sharing or leaking between doctors.
+//   • Each doctor's files are stored in an isolated folder:
+//       curaclinic/doctors/{doctorId}/prescriptions/{uuid}
+//     So even at the Cloudinary folder level, doctors cannot see each other's files.
+//
+// Returns null if Cloudinary is not configured or asset publicId is missing.
+// ─────────────────────────────────────────────────────────────────────────────
+function generateSignedDeliveryUrl(cloudinaryAsset) {
+  if (!isCloudinaryConfigured()) return null;
+  const publicId = cleanValue(cloudinaryAsset?.publicId);
+  if (!publicId) return null;
+
+  const resourceType = cleanValue(cloudinaryAsset?.resourceType || "image");
+  const deliveryType = cleanValue(cloudinaryAsset?.deliveryType || "authenticated");
+  const expireAt = Math.floor(Date.now() / 1000) + SIGNED_URL_TTL_SECONDS;
+
+  // Cloudinary delivery signature: SHA-1 of "exp={expireAt}&public_id={publicId}" + API_SECRET
+  const signaturePayload = `exp=${expireAt}&public_id=${publicId}`;
+  const signature = crypto.createHash("sha1").update(`${signaturePayload}${API_SECRET}`).digest("hex");
+
+  // Build URL: https://res.cloudinary.com/{cloud}/{resource}/{type}/s--{sig}--/e_{exp}/v{ver}/{public_id}.{format}
+  const version = cloudinaryAsset?.version ? `v${cloudinaryAsset.version}/` : "";
+  const format = cleanValue(cloudinaryAsset?.format);
+  const publicIdWithExt = format && !publicId.endsWith(`.${format}`) ? `${publicId}.${format}` : publicId;
+
+  return (
+    `https://res.cloudinary.com/${encodeURIComponent(CLOUD_NAME)}/` +
+    `${resourceType}/${deliveryType}/` +
+    `s--${signature}--/` +
+    `e_${expireAt}/` +
+    `${version}${publicIdWithExt}`
+  );
+}
+
 async function uploadClinicalDocument(file, { clinic = "CuraClinic AI", doctorId = "unassigned" } = {}) {
   if (!isCloudinaryConfigured()) {
     throw new Error("Cloudinary is not configured. Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET.");
@@ -58,12 +106,27 @@ async function uploadClinicalDocument(file, { clinic = "CuraClinic AI", doctorId
   if (!file?.path) throw new Error("Clinical file is unavailable for Cloudinary upload.");
 
   const timestamp = Math.floor(Date.now() / 1000);
-  const publicId = `curaclinic/clinical/${safeSegment(clinic, "clinic")}/${safeSegment(doctorId, "doctor")}/${crypto.randomUUID()}`;
+
+  // ── DOCTOR-ISOLATED FOLDER STRUCTURE ──────────────────────────────────────
+  // Each doctor's uploads go into their own private namespace:
+  //   curaclinic/doctors/{doctorId}/prescriptions/{uuid}
+  //
+  // Access control layers:
+  //   1. App layer  → findAccessibleDocument() checks uploadedBy === req.currentUser._id
+  //   2. Cloudinary → type:"authenticated" means no direct public access; only
+  //                   server-generated signed URLs (generateSignedDeliveryUrl) work
+  //   3. Folder     → Doctor A's files are under /doctors/{docAId}/, never visible
+  //                   to Doctor B even in the Cloudinary console (if folder-level
+  //                   access policies are applied)
+  // ──────────────────────────────────────────────────────────────────────────
+  const publicId = `curaclinic/doctors/${safeSegment(doctorId, "unassigned")}/prescriptions/${crypto.randomUUID()}`;
+
   const baseParameters = {
     timestamp,
     public_id: publicId,
-    type: "authenticated",
+    type: "authenticated",   // Private — no public URL works; only signed URLs
   };
+
   const bytes = await fs.readFile(file.path);
   const postUpload = async (parameters) => {
     const form = new FormData();
@@ -80,9 +143,6 @@ async function uploadClinicalDocument(file, { clinic = "CuraClinic AI", doctorId
   };
 
   let { response, payload } = await postUpload({ ...baseParameters, ...(CLINICAL_PRESET ? { upload_preset: CLINICAL_PRESET } : {}) });
-  // A signed server-side upload does not require a preset. Keep the configured
-  // preset when it exists, but don't prevent clinical intake if it was deleted
-  // or has not yet been created in the Cloudinary console.
   if (!response.ok && CLINICAL_PRESET && /upload preset not found/i.test(cleanValue(payload?.error?.message))) {
     console.warn("Configured CLOUDINARY_CLINICAL_PRESET was not found; retrying signed authenticated upload without a preset.");
     ({ response, payload } = await postUpload(baseParameters));
@@ -92,8 +152,10 @@ async function uploadClinicalDocument(file, { clinic = "CuraClinic AI", doctorId
   return {
     assetId: payload.asset_id,
     publicId: payload.public_id,
-    secureUrl: payload.secure_url || "",  // HTTPS delivery URL — used by sourceAvailable check
-    url: payload.url || "",              // HTTP delivery URL — fallback
+    // Raw URLs below — authenticated assets return these but they do NOT work
+    // without a signature. Always use generateSignedDeliveryUrl() to serve them.
+    secureUrl: payload.secure_url || "",
+    url: payload.url || "",
     resourceType: payload.resource_type || "raw",
     deliveryType: payload.type || "authenticated",
     version: Number(payload.version || 0) || null,
@@ -120,4 +182,11 @@ async function destroyClinicalDocument(asset) {
   }).catch(() => {});
 }
 
-module.exports = { isCloudinaryConfigured, uploadClinicalDocument, destroyClinicalDocument, createUploadSignature, inferredMimeType };
+module.exports = {
+  isCloudinaryConfigured,
+  uploadClinicalDocument,
+  destroyClinicalDocument,
+  generateSignedDeliveryUrl,
+  createUploadSignature,
+  inferredMimeType,
+};

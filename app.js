@@ -21,7 +21,7 @@ const User = require("./models/user");
 const { MedicalRecord, VerificationDraft, Conversation, Message } = require("./models/history");
 const { analyzeDocumentPayload, evaluateLab, screenInteractions, semanticConfidence } = require("./utils/clinicalAnalyzer");
 const { answerClinicalQuestion, extractDocument, generateSoap } = require("./utils/aiClinical");
-const { uploadClinicalDocument, destroyClinicalDocument } = require("./utils/cloudinaryStorage");
+const { uploadClinicalDocument, destroyClinicalDocument, generateSignedDeliveryUrl } = require("./utils/cloudinaryStorage");
 const { clinicalSearchEngine } = require("./utils/dsaSearchEngine");
 const { getPipelineMetrics, cachedAnalyzeDocumentPayload } = require("./utils/dsaExtraction");
 
@@ -1112,9 +1112,10 @@ app.get("/documents/:id/file", asyncHandler(async (req, res) => {
   if (!document) {
     return res.status(404).send("Clinical source file is not available.");
   }
+
+  // ── Layer 1: Local private storage ───────────────────────────────────────
   const sourcePath = resolvePrivateDocumentPath(document);
   if (sourcePath && fs.existsSync(sourcePath)) {
-    // Infer Content-Type from file extension for correct browser rendering
     const ext = path.extname(sourcePath).toLowerCase();
     const mimeMap = { ".pdf": "application/pdf", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp" };
     const mimeType = mimeMap[ext] || document.fileType || "application/octet-stream";
@@ -1122,11 +1123,20 @@ app.get("/documents/:id/file", asyncHandler(async (req, res) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
     return res.sendFile(sourcePath, { headers: { "Content-Disposition": `inline; filename="${encodeURIComponent(document.originalFilename || 'clinical-record')}"` } });
   }
-  // Cloudinary fallback — only redirect if URL is a real HTTP URL, not an empty string
-  const cloudinaryUrl = document.cloudinary?.secureUrl || document.cloudinary?.url || "";
-  if (cloudinaryUrl.startsWith("http")) {
-    return res.redirect(cloudinaryUrl);
+
+  // ── Layer 2: Cloudinary — generate a SHORT-LIVED SIGNED URL ──────────────
+  // We never redirect to the raw secureUrl because authenticated Cloudinary
+  // assets require a server-side signature. The signed URL expires in 5 minutes,
+  // preventing URL sharing across doctors or sessions.
+  if (document.cloudinary?.publicId) {
+    const signedUrl = generateSignedDeliveryUrl(document.cloudinary);
+    if (signedUrl) {
+      // Cache-control: private, no-store — don't let proxies cache signed URLs
+      res.setHeader("Cache-Control", "private, no-store");
+      return res.redirect(302, signedUrl);
+    }
   }
+
   return res.status(404).send("Clinical source file is not available.");
 }));
 
