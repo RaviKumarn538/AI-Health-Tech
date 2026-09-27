@@ -14945,6 +14945,7 @@ button.sidebar-link {
   max-width: none;
   padding: 0 0 82px;
   overflow: hidden;
+  position: relative;
 }
 
 .nabla-public-nav {
@@ -14958,6 +14959,21 @@ button.sidebar-link {
   margin: 0 auto;
   padding: 0 clamp(22px, 5vw, 72px);
   box-sizing: border-box;
+}
+
+.public-home-body .nabla-public-nav {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  width: min(1360px, calc(100% - 48px));
+  min-height: 64px;
+  padding: 0 clamp(16px, 2.4vw, 28px);
+  border: 1px solid rgba(255, 255, 255, .32);
+  border-radius: 18px;
+  background: rgba(248, 255, 252, .84);
+  box-shadow: 0 16px 42px rgba(2, 30, 31, .2), inset 0 1px 0 rgba(255, 255, 255, .82);
+  backdrop-filter: blur(18px) saturate(1.18);
+  transform: translateX(-50%);
 }
 
 .nabla-public-brand {
@@ -15020,6 +15036,7 @@ button.sidebar-link {
 }
 
 .nabla-public-links a {
+  position: relative;
   color: #365653 !important;
   font-size: 13px;
   font-weight: 600;
@@ -15029,6 +15046,25 @@ button.sidebar-link {
 
 .nabla-public-links a:hover {
   color: #0d9488 !important;
+}
+
+.nabla-public-links > a:not(.nabla-public-cta)::after {
+  position: absolute;
+  right: 0;
+  bottom: 1px;
+  left: 0;
+  height: 2px;
+  content: '';
+  border-radius: 999px;
+  background: #0d9488;
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform .22s ease;
+}
+
+.nabla-public-links > a:not(.nabla-public-cta):hover::after,
+.nabla-public-links > a:not(.nabla-public-cta):focus-visible::after {
+  transform: scaleX(1);
 }
 
 .nabla-public-links .nabla-public-cta {
@@ -15045,6 +15081,8 @@ button.sidebar-link {
 .nabla-public-links .nabla-public-cta:hover {
   color: #fff !important;
   background: #084c58;
+  box-shadow: 0 12px 24px rgba(8, 76, 88, .28);
+  transform: translateY(-1px);
 }
 
 .public-home-body .nabla-hero-section {
@@ -15058,12 +15096,12 @@ button.sidebar-link {
   position: relative;
   display: grid;
   width: 100%;
-  min-height: clamp(620px, calc(100vh - 76px), 820px);
+  min-height: clamp(700px, 100svh, 940px);
   overflow: hidden;
   isolation: isolate;
-  border-radius: 0;
+  border-radius: 0 0 34px 34px;
   background: #123b3d url('/images/clinical-hero.svg') center / cover no-repeat;
-  box-shadow: none;
+  box-shadow: 0 28px 70px rgba(8, 57, 55, .16);
 }
 
 .nabla-hero-video,
@@ -15078,33 +15116,45 @@ button.sidebar-link {
 .nabla-hero-video {
   z-index: -3;
   object-fit: cover;
-  object-position: center;
+  object-position: center center;
   background: #123b3d;
+  filter: saturate(1.08) contrast(1.06) brightness(.82);
+  transform: scale(1.035);
 }
 
 .nabla-hero-video-fallback {
   z-index: -4;
-  background: linear-gradient(135deg, rgba(7, 55, 58, .92), rgba(13, 148, 136, .46)), url('/images/clinical-hero.svg') center / cover no-repeat;
+  background: linear-gradient(135deg, rgba(4, 39, 43, .95), rgba(13, 148, 136, .5)), url('/images/clinical-hero.svg') center / cover no-repeat;
 }
 
 .nabla-hero-scrim {
   z-index: -2;
   background:
-    linear-gradient(180deg, rgba(4, 37, 38, .27) 0%, rgba(4, 37, 38, .2) 34%, rgba(4, 37, 38, .76) 100%),
-    linear-gradient(90deg, rgba(3, 43, 44, .46), transparent 54%, rgba(3, 43, 44, .2));
+    radial-gradient(circle at 50% 42%, rgba(172, 255, 223, .13), transparent 34%),
+    linear-gradient(180deg, rgba(3, 28, 31, .48) 0%, rgba(3, 28, 31, .2) 32%, rgba(3, 28, 31, .84) 100%),
+    linear-gradient(90deg, rgba(2, 36, 39, .58), transparent 54%, rgba(2, 36, 39, .38));
 }
 
 .nabla-hero-content {
   align-self: center;
   justify-self: center;
-  width: min(880px, calc(100% - 48px));
-  padding: 104px 0 86px;
+  position: relative;
+  z-index: 2;
+  width: min(960px, calc(100% - 48px));
+  padding: clamp(148px, 19vh, 198px) 0 112px;
   color: #fff;
   text-align: center;
 }
 
 .nabla-hero-stage::after {
-  content: none;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  content: '';
+  pointer-events: none;
+  border: 1px solid rgba(214, 255, 240, .14);
+  border-radius: inherit;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12), inset 0 -120px 150px rgba(1, 29, 30, .16);
 }
 
 .deus-hero-controls {
@@ -15114,7 +15164,7 @@ button.sidebar-link {
   z-index: 4;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
 }
 
 .deus-hero-media-toggle,
@@ -15127,8 +15177,9 @@ button.sidebar-link {
   border: 1px solid rgba(225, 255, 246, .22);
   border-radius: 999px;
   color: rgba(244, 255, 250, .88) !important;
-  background: rgba(4, 35, 36, .38);
-  backdrop-filter: blur(10px);
+  background: rgba(4, 35, 36, .48);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, .12), inset 0 1px 0 rgba(255, 255, 255, .12);
+  backdrop-filter: blur(14px) saturate(1.12);
   font-family: inherit;
   font-size: 10px;
   font-weight: 700;
@@ -15169,14 +15220,15 @@ button.sidebar-link {
 }
 
 .nabla-hero-content .nabla-badge-wrapper {
-  margin-bottom: 24px;
+  margin-bottom: 28px;
 }
 
 .nabla-hero-content .nabla-badge {
   color: #eafff8;
   background: rgba(6, 39, 41, .46);
   border-color: rgba(196, 255, 233, .35);
-  box-shadow: 0 12px 24px rgba(0, 0, 0, .08);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, .16), inset 0 1px 0 rgba(255, 255, 255, .14);
+  backdrop-filter: blur(12px);
 }
 
 .nabla-hero-content .nabla-badge-text {
@@ -15189,12 +15241,13 @@ button.sidebar-link {
 }
 
 .nabla-hero-content .nabla-hero-title {
-  margin-bottom: 20px;
+  max-width: 960px;
+  margin: 0 auto 24px;
   color: #fff;
-  font-size: clamp(42px, 6vw, 76px);
-  line-height: 1.05;
-  letter-spacing: -0.055em;
-  text-shadow: 0 3px 24px rgba(0, 0, 0, .13);
+  font-size: clamp(46px, 6.4vw, 92px);
+  line-height: .99;
+  letter-spacing: -0.065em;
+  text-shadow: 0 4px 30px rgba(0, 0, 0, .24);
 }
 
 .nabla-hero-content .nabla-gradient-text {
@@ -15204,47 +15257,82 @@ button.sidebar-link {
 }
 
 .nabla-hero-content .nabla-hero-subtitle {
-  max-width: 700px;
-  margin-bottom: 32px;
+  max-width: 670px;
+  margin: 0 auto 36px;
   color: rgba(255, 255, 255, .86);
-  font-size: 17px;
+  font-size: 18px;
+  line-height: 1.65;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, .22);
+}
+
+.nabla-hero-content .nabla-hero-actions {
+  gap: 12px;
+}
+
+.nabla-hero-content .nabla-btn-primary,
+.nabla-hero-content .nabla-btn-secondary,
+.nabla-hero-content .nabla-btn-ghost {
+  min-height: 54px;
+  padding: 0 20px;
+  border-radius: 15px;
+  box-sizing: border-box;
+  transition: transform .22s ease, box-shadow .22s ease, background .22s ease, border-color .22s ease;
 }
 
 .nabla-hero-content .nabla-btn-primary {
   color: #0a3230 !important;
-  background: #fff;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, .16);
+  background: linear-gradient(135deg, #fff 0%, #eafff7 100%);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, .2), inset 0 1px 0 rgba(255, 255, 255, .9);
 }
 
 .nabla-hero-content .nabla-btn-primary:hover {
   color: #073f3c !important;
   background: #dcfff0;
+  box-shadow: 0 18px 34px rgba(0, 0, 0, .28);
+  transform: translateY(-3px);
 }
 
 .nabla-hero-content .nabla-btn-secondary {
   color: #fff !important;
   background: rgba(255, 255, 255, .14);
   border-color: rgba(255, 255, 255, .28);
-  box-shadow: none;
-  backdrop-filter: blur(8px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14);
+  backdrop-filter: blur(12px) saturate(1.12);
 }
 
 .nabla-hero-content .nabla-btn-secondary:hover {
   color: #fff !important;
   background: rgba(255, 255, 255, .24);
   border-color: rgba(255, 255, 255, .42);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, .16);
+  transform: translateY(-3px);
 }
 
 .nabla-hero-content .nabla-btn-ghost {
+  min-height: 48px;
   color: #effff8 !important;
+  background: rgba(4, 35, 36, .18);
+  border: 1px solid transparent;
 }
 
 .nabla-hero-content .nabla-btn-ghost:hover {
   color: #b6ffe0 !important;
+  border-color: rgba(182, 255, 224, .32);
+  background: rgba(4, 35, 36, .36);
+  transform: translateY(-2px);
 }
 
 .nabla-hero-content .nabla-trust-strip {
+  display: inline-flex;
+  max-width: 100%;
+  margin: 30px auto 0;
+  padding: 10px 16px;
+  border: 1px solid rgba(225, 255, 246, .16);
+  border-radius: 999px;
   color: rgba(255, 255, 255, .82);
+  background: rgba(4, 35, 36, .28);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1);
+  backdrop-filter: blur(12px);
 }
 
 .nabla-hero-content .nabla-trust-sep {
@@ -15657,7 +15745,15 @@ button.sidebar-link {
 
 @media (max-width: 760px) {
   .public-home-body .nabla-home-container {
-    padding: 0 12px 52px;
+    padding: 0 0 52px;
+  }
+
+  .public-home-body .nabla-public-nav {
+    top: 12px;
+    width: calc(100% - 24px);
+    min-height: 60px;
+    padding: 0 12px;
+    border-radius: 16px;
   }
 
   .nabla-public-nav {
@@ -15679,13 +15775,13 @@ button.sidebar-link {
   }
 
   .nabla-hero-stage {
-    min-height: 650px;
-    border-radius: 0;
+    min-height: 720px;
+    border-radius: 0 0 24px 24px;
   }
 
   .nabla-hero-content {
     width: calc(100% - 30px);
-    padding: 74px 0 58px;
+    padding: 140px 0 78px;
   }
 
   .nabla-hero-content .nabla-badge {
