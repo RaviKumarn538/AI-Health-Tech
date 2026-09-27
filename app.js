@@ -42,7 +42,8 @@ const TAGLINE = "Turn handwritten clinical documents into verified digital recor
 const DEFAULT_CLINICIAN = process.env.CLINICIAN_NAME || "Clinical Team";
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
-const PRODUCTION_APP_URL = process.env.APP_ORIGIN || "https://ai-health-tech.onrender.com";
+const normalizeOrigin = (value) => String(value || "").trim().replace(/\/+$/, "");
+const PRODUCTION_APP_URL = normalizeOrigin(process.env.APP_ORIGIN || "https://ai-health-tech.onrender.com");
 // A production build may still be run on localhost for a final smoke test.
 // Secure cookies cannot be returned over plain HTTP, so base this on the
 // actual configured public origin rather than NODE_ENV alone.
@@ -62,7 +63,7 @@ const authenticationRequired = true;
 const GOOGLE_STATE_TTL_MS = 10 * 60 * 1000;
 
 function getGoogleRedirectUri(req = null) {
-  if (process.env.GOOGLE_REDIRECT_URI) return process.env.GOOGLE_REDIRECT_URI;
+  if (process.env.GOOGLE_REDIRECT_URI) return String(process.env.GOOGLE_REDIRECT_URI).trim();
   if (req && !isProduction) {
     const proto = req.headers["x-forwarded-proto"] || req.protocol || (isProduction ? "https" : "http");
     const host = req.get("host");
@@ -726,6 +727,7 @@ app.get("/", asyncHandler(async (req, res) => {
   if (req.currentUser) {
     return res.redirect("/dashboard");
   }
+  res.setHeader("Cache-Control", "no-store, max-age=0");
   const googleAuthUrl = await buildGoogleAuthUrl(req, "/dashboard");
   res.render("pages/home", {
     pageTitle: "Clinical intelligence for the human side of care",
@@ -739,6 +741,7 @@ app.get("/health", (_req, res) => {
 });
 
 app.get("/login", (req, res) => {
+  res.setHeader("Cache-Control", "no-store, max-age=0");
   const nextUrl = safeNextPath(req.query.next);
   if (googleConfigured) {
     return res.redirect("/auth/google?next=" + encodeURIComponent(nextUrl));
@@ -760,6 +763,7 @@ app.post("/login", (_req, res) => res.redirect("/login?error=Use+Sign+in+with+Go
 app.post("/signup", (_req, res) => res.redirect("/login?error=Use+Sign+in+with+Google."));
 
 app.get("/auth/google", asyncHandler(async (req, res) => {
+  res.setHeader("Cache-Control", "no-store, max-age=0");
   const authUrl = await buildGoogleAuthUrl(req, req.query.next);
   if (!authUrl) {
     return res.status(503).render("pages/login", {
@@ -2028,7 +2032,8 @@ app.use((error, req, res, _next) => {
   res.status(500).render("pages/error", { pageTitle: "Something went wrong", message: isProduction ? "The clinical service could not complete this request." : error.message });
 });
 
-const server = app.listen(PORT, () => console.log(`${CLINIC_NAME} running at http://localhost:${PORT}`));
+const serverOrigin = isProduction ? PRODUCTION_APP_URL : `http://localhost:${PORT}`;
+const server = app.listen(PORT, () => console.log(`${CLINIC_NAME} running at ${serverOrigin}`));
 
 mongoose.connect(MONGO_URL, { serverSelectionTimeoutMS: Number(process.env.MONGO_SERVER_SELECTION_TIMEOUT_MS || 5000) })
   .then(async () => {
