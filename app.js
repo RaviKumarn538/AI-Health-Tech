@@ -724,9 +724,6 @@ async function seedDemoData() {
 }
 
 app.get("/", asyncHandler(async (req, res) => {
-  if (req.currentUser) {
-    return res.redirect("/dashboard");
-  }
   res.setHeader("Cache-Control", "no-store, max-age=0");
   const googleAuthUrl = await buildGoogleAuthUrl(req, "/dashboard");
   res.render("pages/home", {
@@ -825,7 +822,7 @@ app.get("/auth/google/callback", asyncHandler(async (req, res) => {
 app.post("/logout", (req, res) => {
   req.session.destroy(() => {
     res.clearCookie("curaclinic.sid", { path: "/", httpOnly: true, sameSite: "lax", secure: sessionCookieSecure });
-    res.redirect("/login?signed_out=true");
+    res.redirect("/");
   });
 });
 
