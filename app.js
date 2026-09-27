@@ -101,6 +101,26 @@ function saveSession(req) {
     req.session.save((error) => error ? reject(error) : resolve());
   });
 }
+
+async function buildGoogleAuthUrl(req, nextPath = "/dashboard") {
+  const googleOAuthClient = getOAuthClient(req);
+  if (!googleOAuthClient) return "";
+
+  const state = crypto.randomBytes(24).toString("hex");
+  req.session.googleOAuthState = {
+    value: state,
+    createdAt: Date.now(),
+    nextUrl: safeNextPath(nextPath),
+  };
+  await saveSession(req);
+
+  return googleOAuthClient.generateAuthUrl({
+    access_type: "offline",
+    scope: ["openid", "email", "profile"],
+    prompt: "select_account",
+    state,
+  });
+}
 const STORAGE_DIR = path.join(__dirname, "storage", "documents");
 const SAMPLE_DIR = path.join(__dirname, "sample_files");
 const MAX_UPLOAD_SIZE = 15 * 1024 * 1024;
@@ -706,9 +726,11 @@ app.get("/", asyncHandler(async (req, res) => {
   if (req.currentUser) {
     return res.redirect("/dashboard");
   }
+  const googleAuthUrl = await buildGoogleAuthUrl(req, "/dashboard");
   res.render("pages/home", {
     pageTitle: "Clinical intelligence for the human side of care",
     brandName: "DEUS — AI-powered Clinical Intelligence",
+    googleAuthUrl: googleAuthUrl || "/auth/google?next=%2Fdashboard",
   });
 }));
 
@@ -738,8 +760,8 @@ app.post("/login", (_req, res) => res.redirect("/login?error=Use+Sign+in+with+Go
 app.post("/signup", (_req, res) => res.redirect("/login?error=Use+Sign+in+with+Google."));
 
 app.get("/auth/google", asyncHandler(async (req, res) => {
-  const googleOAuthClient = getOAuthClient(req);
-  if (!googleOAuthClient) {
+  const authUrl = await buildGoogleAuthUrl(req, req.query.next);
+  if (!authUrl) {
     return res.status(503).render("pages/login", {
       pageTitle: "Sign in to DEUS",
       brandName: "DEUS — AI-powered Clinical Intelligence",
@@ -749,16 +771,7 @@ app.get("/auth/google", asyncHandler(async (req, res) => {
       nextUrl: safeNextPath(req.query.next),
     });
   }
-  const state = crypto.randomBytes(24).toString("hex");
-  req.session.googleOAuthState = {
-    value: state,
-    createdAt: Date.now(),
-    nextUrl: safeNextPath(req.query.next),
-  };
-  // Persist the state before leaving this origin. This avoids intermittent
-  // callback failures with asynchronous Mongo-backed session stores.
-  await saveSession(req);
-  res.redirect(googleOAuthClient.generateAuthUrl({ access_type: "offline", scope: ["openid", "email", "profile"], prompt: "select_account", state }));
+  res.redirect(authUrl);
 }));
 
 app.get("/auth/google/callback", asyncHandler(async (req, res) => {

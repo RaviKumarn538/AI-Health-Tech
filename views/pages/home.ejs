@@ -1,5 +1,7 @@
 <% layout("layouts/boilerplate") %>
 
+<% const dashboardSignInUrl = (typeof googleAuthUrl !== 'undefined' && googleAuthUrl) || '/auth/google?next=%2Fdashboard'; %>
+
 <div class="nabla-home-container">
   <header class="nabla-public-nav" aria-label="Public navigation">
     <a class="nabla-public-brand deus-public-brand" href="/" aria-label="DEUS AI-powered Clinical Intelligence home">
@@ -9,8 +11,8 @@
     <nav class="nabla-public-links" aria-label="Homepage links">
       <a href="#workflow">How it works</a>
       <a href="#capabilities">Capabilities</a>
-      <a href="/auth/google?next=%2Fdashboard">Sign in</a>
-      <a class="nabla-public-cta" href="/auth/google?next=%2Fdashboard">Sign in to workspace <span aria-hidden="true">→</span></a>
+      <a href="<%= dashboardSignInUrl %>">Sign in</a>
+      <a class="nabla-public-cta" href="<%= dashboardSignInUrl %>">Sign in to workspace <span aria-hidden="true">→</span></a>
     </nav>
   </header>
 
@@ -47,7 +49,7 @@
         </p>
 
         <div class="nabla-hero-actions">
-          <a class="nabla-btn-primary" href="/auth/google?next=%2Fdashboard" id="heroSignInBtn">
+          <a class="nabla-btn-primary" href="<%= dashboardSignInUrl %>" id="heroSignInBtn">
             <span>Sign in to DEUS Workspace</span>
             <svg class="nabla-btn-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
           </a>
@@ -229,7 +231,7 @@
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
                   Signed by <%= clinicianName %>
                 </span>
-          <a class="nabla-inline-link" href="/auth/google?next=%2Fdashboard">Open in Review Workspace →</a>
+          <a class="nabla-inline-link" href="<%= dashboardSignInUrl %>">Open in Review Workspace →</a>
               </div>
             </div>
           </div>
@@ -438,7 +440,7 @@
         <div class="nabla-pillar-icon">🛡</div>
         <h3>Clinical Safety Guardrails</h3>
         <p>Proactively alert physicians to dangerous drug-drug interactions, penicillin allergy conflicts, and critical lab values (fasting glucose, HbA1c, creatinine).</p>
-        <a class="nabla-pillar-link" href="/auth/google?next=%2Fdashboard">View Active Alerts →</a>
+        <a class="nabla-pillar-link" href="<%= dashboardSignInUrl %>">View Active Alerts →</a>
       </div>
 
       <div class="nabla-pillar-card">
@@ -499,7 +501,7 @@
         <h2>Bring clarity back to care.</h2>
         <p>Explore DEUS—the AI-powered clinical intelligence layer for structured, reviewable healthcare workflows.</p>
         <div class="nabla-cta-btns">
-          <a class="nabla-btn-primary" href="/auth/google?next=%2Fdashboard">
+          <a class="nabla-btn-primary" href="<%= dashboardSignInUrl %>">
             <span>Sign in to DEUS Workspace</span>
             <span>→</span>
           </a>
@@ -524,8 +526,8 @@
     <div class="deus-footer-links" aria-label="DEUS footer navigation">
       <a href="#workflow">Workflow</a>
       <a href="#capabilities">Capabilities</a>
-              <a href="/auth/google?next=%2Fdashboard">Sign in</a>
-      <a href="/auth/google?next=%2Fdashboard">Workspace</a>
+              <a href="<%= dashboardSignInUrl %>">Sign in</a>
+      <a href="<%= dashboardSignInUrl %>">Workspace</a>
     </div>
     <div class="deus-footer-safety">
       <span aria-hidden="true">✓</span>
