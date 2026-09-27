@@ -94,6 +94,8 @@
     <!-- Mobile Drawer Overlay Backdrop -->
     <div class="sidebar-backdrop" id="sidebarBackdrop" style="display: none;"></div>
 
-    <script src="/js/clinic.js?v=<%= assetVersion %>"></script>
+    <% if (currentPath !== '/' && currentPath !== '/login') { %>
+      <script src="/js/clinic.js?v=<%= assetVersion %>" defer></script>
+    <% } %>
   </body>
 </html>

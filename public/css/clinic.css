@@ -15251,6 +15251,20 @@ button.sidebar-link {
   color: rgba(255, 255, 255, .4);
 }
 
+/* Defer layout/paint for sections below the first viewport. This keeps the
+   hero responsive while preserving stable space as the user scrolls. */
+.public-home-body .nabla-medical-showcase,
+.public-home-body .nabla-demo-section,
+.public-home-body .nabla-metrics-section,
+.public-home-body .nabla-pillars-section,
+.public-home-body .nabla-workflow-section,
+.public-home-body .nabla-quote-section,
+.public-home-body .nabla-bottom-cta,
+.public-home-body .deus-team-band {
+  content-visibility: auto;
+  contain-intrinsic-size: 720px;
+}
+
 .deus-team-band {
   width: min(1240px, calc(100% - 64px));
   margin: 0 auto 96px;

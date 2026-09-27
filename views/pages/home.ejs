@@ -23,9 +23,9 @@
   <!-- HERO SECTION -->
   <section class="nabla-hero-section" id="heroSection" aria-labelledby="heroTitle">
     <div class="nabla-hero-stage">
-      <video class="nabla-hero-video" autoplay muted loop playsinline preload="metadata" poster="/images/clinical-hero.svg" aria-label="Clinical AI documentation workflow preview">
-        <!-- The remote source keeps the prototype visually rich; replace it with an owned MP4 in production. -->
-        <source src="https://www-assets.nabla.com/videos/home/nabla.mp4" type="video/mp4">
+      <video class="nabla-hero-video" autoplay muted loop playsinline preload="none" poster="/images/clinical-hero.svg" aria-label="Clinical AI documentation workflow preview">
+        <!-- Load the remote motion only after the first page render; the local poster is immediate. -->
+        <source data-src="https://www-assets.nabla.com/videos/home/nabla.mp4" type="video/mp4">
       </video>
       <div class="nabla-hero-video-fallback" aria-hidden="true"></div>
       <div class="nabla-hero-scrim" aria-hidden="true"></div>
@@ -110,7 +110,7 @@
 
     <div class="nabla-medical-image-grid">
       <figure class="nabla-medical-image-card nabla-medical-image-large">
-        <img src="https://images.unsplash.com/photo-1758691463000-08b98131daf3?auto=format&amp;fit=crop&amp;w=2400&amp;q=90" alt="Doctor showing a patient medical scan on a tablet" loading="eager" fetchpriority="high" referrerpolicy="no-referrer">
+        <img src="https://images.unsplash.com/photo-1758691463000-08b98131daf3?auto=format&amp;fit=crop&amp;w=1600&amp;q=82" width="1600" height="1067" alt="Doctor showing a patient medical scan on a tablet" loading="lazy" decoding="async" referrerpolicy="no-referrer">
         <figcaption>
           <span>01</span>
           <strong>More presence. Less paperwork.</strong>
@@ -118,7 +118,7 @@
         </figcaption>
       </figure>
       <figure class="nabla-medical-image-card nabla-medical-image-top">
-        <img src="https://images.unsplash.com/photo-1758691463569-66de91d76452?auto=format&amp;fit=crop&amp;w=1800&amp;q=90" alt="Two clinicians reviewing a medical scan on a tablet" loading="lazy" referrerpolicy="no-referrer">
+        <img src="https://images.unsplash.com/photo-1758691463569-66de91d76452?auto=format&amp;fit=crop&amp;w=1200&amp;q=82" width="1200" height="800" alt="Two clinicians reviewing a medical scan on a tablet" loading="lazy" decoding="async" referrerpolicy="no-referrer">
         <figcaption>
           <span>02</span>
           <strong>One clear clinical story.</strong>
@@ -126,7 +126,7 @@
         </figcaption>
       </figure>
       <figure class="nabla-medical-image-card nabla-medical-image-bottom">
-        <img src="https://images.unsplash.com/photo-1758691462667-f2fb90a067ff?auto=format&amp;fit=crop&amp;w=1800&amp;q=90" alt="Doctor reviewing MRI images on a clinical tablet" loading="lazy" referrerpolicy="no-referrer">
+        <img src="https://images.unsplash.com/photo-1758691462667-f2fb90a067ff?auto=format&amp;fit=crop&amp;w=1200&amp;q=82" width="1200" height="800" alt="Doctor reviewing MRI images on a clinical tablet" loading="lazy" decoding="async" referrerpolicy="no-referrer">
         <figcaption>
           <span>03</span>
           <strong>Confidence at sign-off.</strong>
@@ -522,19 +522,19 @@
     </div>
     <div class="deus-team-grid">
       <div class="deus-team-card">
-        <div class="deus-team-photo deus-team-photo-ravi"><img src="https://lh3.googleusercontent.com/pw/AP1GczOaI1G8lJt01X7UBwUTeuBVyak2hTv9UTbyFnSeG3I7hZUaJ2_raSe_-8rHRcC562tJ6dckDtLTftn-FaTm4QzFMh4KAiNp3C3XeR5Prxs2j80vTtnD=w1000-h1000-c" alt="Ravi Kumar Nagpure" loading="lazy" decoding="async" referrerpolicy="no-referrer"></div>
+        <div class="deus-team-photo deus-team-photo-ravi"><img src="https://lh3.googleusercontent.com/pw/AP1GczOaI1G8lJt01X7UBwUTeuBVyak2hTv9UTbyFnSeG3I7hZUaJ2_raSe_-8rHRcC562tJ6dckDtLTftn-FaTm4QzFMh4KAiNp3C3XeR5Prxs2j80vTtnD=w600-h600-c" width="600" height="600" alt="Ravi Kumar Nagpure" loading="lazy" decoding="async" referrerpolicy="no-referrer"></div>
         <div class="deus-team-meta"><strong>Ravi Kumar Nagpure</strong><small>Team DEUS</small></div>
       </div>
       <div class="deus-team-card">
-        <div class="deus-team-photo deus-team-photo-prashant"><img src="https://lh3.googleusercontent.com/pw/AP1GczOf9UKjYXkNHazFL-xmpBQed_zP3Ahx8TBxHcQtMsItca4jzCCx7I8P6dnc99hXNnPfTSedTOogUzAAs64_TBEJCVAEnoyz5bzm1mPg1c7EFUyGeyBR=w1000-h1000-c" alt="Prashant Rajput" loading="lazy" decoding="async" referrerpolicy="no-referrer"></div>
+        <div class="deus-team-photo deus-team-photo-prashant"><img src="https://lh3.googleusercontent.com/pw/AP1GczOf9UKjYXkNHazFL-xmpBQed_zP3Ahx8TBxHcQtMsItca4jzCCx7I8P6dnc99hXNnPfTSedTOogUzAAs64_TBEJCVAEnoyz5bzm1mPg1c7EFUyGeyBR=w600-h600-c" width="600" height="600" alt="Prashant Rajput" loading="lazy" decoding="async" referrerpolicy="no-referrer"></div>
         <div class="deus-team-meta"><strong>Prashant Rajput</strong><small>Team DEUS</small></div>
       </div>
       <div class="deus-team-card">
-        <div class="deus-team-photo deus-team-photo-mohan"><img src="https://lh3.googleusercontent.com/pw/AP1GczPIbBxvz6TiHr8h3hqf7i2iR9GNLeJVwOiL7bUyvg8WiG0WsWWFx0q4o38Qx_pHuqW1oQVF2VPpcqO8vnj-T4jUmjuKE9NtR8F3C2ohAM92rQ5XILIl=w1000-h1000-c" alt="Mohan Sen" loading="lazy" decoding="async" referrerpolicy="no-referrer"></div>
+        <div class="deus-team-photo deus-team-photo-mohan"><img src="https://lh3.googleusercontent.com/pw/AP1GczPIbBxvz6TiHr8h3hqf7i2iR9GNLeJVwOiL7bUyvg8WiG0WsWWFx0q4o38Qx_pHuqW1oQVF2VPpcqO8vnj-T4jUmjuKE9NtR8F3C2ohAM92rQ5XILIl=w600-h600-c" width="600" height="600" alt="Mohan Sen" loading="lazy" decoding="async" referrerpolicy="no-referrer"></div>
         <div class="deus-team-meta"><strong>Mohan Sen</strong><small>Team DEUS</small></div>
       </div>
       <div class="deus-team-card">
-        <div class="deus-team-photo deus-team-photo-sumit"><img src="https://lh3.googleusercontent.com/pw/AP1GczNGu42Biz6btiimwZuL2I88Dfw95JxDRmQL8ok2O3dgpHcwd6i0J0FGZmJ8v50ZScQluCD9SRbPxGGfepRrcE07BKSwi1VzW876Zi-oPcHI1NmHM7ye=w1000-h1000-c" alt="Sumit Vishkarna" loading="lazy" decoding="async" referrerpolicy="no-referrer"></div>
+        <div class="deus-team-photo deus-team-photo-sumit"><img src="https://lh3.googleusercontent.com/pw/AP1GczNGu42Biz6btiimwZuL2I88Dfw95JxDRmQL8ok2O3dgpHcwd6i0J0FGZmJ8v50ZScQluCD9SRbPxGGfepRrcE07BKSwi1VzW876Zi-oPcHI1NmHM7ye=w600-h600-c" width="600" height="600" alt="Sumit Vishkarna" loading="lazy" decoding="async" referrerpolicy="no-referrer"></div>
         <div class="deus-team-meta"><strong>Sumit Vishkarna</strong><small>Team DEUS</small></div>
       </div>
     </div>
@@ -567,10 +567,34 @@
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     const heroVideo = document.querySelector('.nabla-hero-video');
+    const heroVideoSource = heroVideo?.querySelector('source[data-src]');
     const heroMediaToggle = document.getElementById('heroMediaToggle');
     const heroMediaIcon = heroMediaToggle?.querySelector('.deus-hero-media-icon');
     const heroMediaLabel = heroMediaToggle?.querySelector('.deus-hero-media-label');
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let heroVideoLoaded = false;
+
+    const loadHeroVideo = () => {
+      if (!heroVideo || !heroVideoSource || heroVideoLoaded) return;
+      heroVideoSource.src = heroVideoSource.dataset.src;
+      heroVideoLoaded = true;
+      heroVideo.load();
+    };
+
+    const scheduleHeroVideo = () => {
+      if (!heroVideo || prefersReducedMotion.matches) return;
+      const connection = navigator.connection;
+      if (connection?.saveData || /(^|-)2g$/.test(connection?.effectiveType || '')) return;
+      const start = () => {
+        loadHeroVideo();
+        heroVideo.play().catch(() => {});
+      };
+      if ('requestIdleCallback' in window) {
+        window.requestIdleCallback(start, { timeout: 2200 });
+      } else {
+        window.setTimeout(start, 1200);
+      }
+    };
 
     const syncHeroMediaControl = () => {
       if (!heroVideo || !heroMediaToggle) return;
@@ -586,6 +610,7 @@
 
     heroMediaToggle?.addEventListener('click', () => {
       if (!heroVideo) return;
+      loadHeroVideo();
       if (heroVideo.paused) {
         heroVideo.play().catch(() => {});
       } else {
@@ -601,6 +626,12 @@
       if (event.matches) heroVideo.pause();
       syncHeroMediaControl();
     });
+
+    if (document.readyState === 'complete') {
+      scheduleHeroVideo();
+    } else {
+      window.addEventListener('load', scheduleHeroVideo, { once: true });
+    }
 
     const tabs = document.querySelectorAll('[data-nabla-tab]');
     const panes = document.querySelectorAll('.nabla-tab-pane');
