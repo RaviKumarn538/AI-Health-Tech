@@ -62,6 +62,24 @@ const googleConfigured = Boolean(
 const authenticationRequired = true;
 const GOOGLE_STATE_TTL_MS = 10 * 60 * 1000;
 
+function getAssetVersion() {
+  const assetPaths = [
+    path.join(__dirname, "public", "css", "clinic.css"),
+    path.join(__dirname, "public", "js", "clinic.js"),
+  ];
+
+  try {
+    const digest = crypto.createHash("sha256");
+    assetPaths.forEach((assetPath) => digest.update(fs.readFileSync(assetPath)));
+    return digest.digest("hex").slice(0, 12);
+  } catch (error) {
+    console.warn("Could not fingerprint static assets:", error.message);
+    return "dev";
+  }
+}
+
+const ASSET_VERSION = getAssetVersion();
+
 function getGoogleRedirectUri(req = null) {
   if (process.env.GOOGLE_REDIRECT_URI) return String(process.env.GOOGLE_REDIRECT_URI).trim();
   if (req && !isProduction) {
@@ -227,6 +245,13 @@ app.use(express.static(path.join(__dirname, "public"), { maxAge: isProduction ? 
 app.use("/vendor/bootstrap", express.static(path.join(__dirname, "node_modules", "bootstrap", "dist", "css")));
 app.use("/vendor/bulma", express.static(path.join(__dirname, "node_modules", "bulma", "css")));
 app.use("/vendor/foundation", express.static(path.join(__dirname, "node_modules", "foundation-sites", "dist", "css")));
+// HTML, redirects, and API responses must always reflect the current server
+// build. Static files are safely cacheable because their URLs carry a content
+// fingerprint from the layout below.
+app.use((req, res, next) => {
+  res.setHeader("Cache-Control", "no-store, max-age=0");
+  next();
+});
 app.use(
   session({
     name: "curaclinic.sid",
@@ -241,6 +266,7 @@ app.use(
 app.locals.clinicName = CLINIC_NAME;
 app.locals.tagline = TAGLINE;
 app.locals.clinicianName = DEFAULT_CLINICIAN;
+app.locals.assetVersion = ASSET_VERSION;
 app.locals.activeClinics = [CLINIC_NAME, "Sunrise Hospital", "Private Practice"];
 app.locals.clinicDisplayName = (clinic) => clinic || CLINIC_NAME;
 app.locals.semanticConfidence = semanticConfidence;
