@@ -15963,6 +15963,10 @@ button.sidebar-link {
     linear-gradient(180deg, #f7fafc 0%, #ffffff 18%, #f7fafc 62%, #ffffff 100%);
 }
 
+.public-home-body section[id] {
+  scroll-margin-top: 88px;
+}
+
 .public-home-body .nabla-ambient-glow {
   display: none;
 }
@@ -16054,6 +16058,28 @@ button.sidebar-link {
   color: #627286;
   font-size: 15px;
   line-height: 1.7;
+}
+
+.deus-heading-lockup {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px;
+  align-items: center;
+  gap: 26px;
+}
+
+.deus-heading-copy {
+  min-width: 0;
+}
+
+.deus-heading-visual {
+  display: block;
+  width: 150px;
+  height: 104px;
+  object-fit: cover;
+  border: 1px solid rgba(187, 207, 217, .85);
+  border-radius: 14px;
+  box-shadow: 0 14px 28px rgba(28, 53, 77, .12);
+  filter: saturate(.9) contrast(1.03);
 }
 
 .public-home-body .nabla-medical-showcase {
@@ -16400,6 +16426,8 @@ button.sidebar-link {
 .deus-safety-copy .deus-section-eyebrow { color: #79d4c2; }
 .deus-safety-copy h2 { color: #ffffff; }
 .deus-safety-copy p { color: #afbdca; }
+.deus-safety-copy .deus-heading-lockup { align-items: start; }
+.deus-safety-copy .deus-heading-visual { border-color: rgba(188, 222, 231, .2); box-shadow: 0 14px 30px rgba(0, 0, 0, .18); filter: saturate(.78) brightness(.84); }
 
 .deus-text-link {
   display: inline-flex;
@@ -16642,6 +16670,33 @@ button.sidebar-link {
 .public-home-body .nabla-quote-section,
 .public-home-body .nabla-bottom-cta { padding-right: 0; padding-left: 0; }
 
+.deus-metrics-intro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px;
+  margin-bottom: 22px;
+}
+
+.deus-metrics-intro p {
+  margin: 0;
+  color: #526b7d;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.deus-metrics-intro .deus-section-eyebrow { margin-bottom: 7px; }
+
+.deus-metrics-intro img {
+  display: block;
+  width: 130px;
+  height: 72px;
+  object-fit: cover;
+  border: 1px solid #dce6ed;
+  border-radius: 11px;
+  box-shadow: 0 10px 20px rgba(28, 53, 77, .08);
+}
+
 .public-home-body .nabla-metric-card,
 .public-home-body .nabla-pillar-card,
 .public-home-body .nabla-step-card {
@@ -16687,18 +16742,54 @@ button.sidebar-link {
 .deus-step-status span { font-size: 12px; }
 
 .public-home-body .nabla-quote-card {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  align-items: center;
+  gap: 28px;
   border: 1px solid #263b52;
   border-radius: 20px;
   background: #132337;
   box-shadow: 0 24px 52px rgba(20, 43, 66, .16);
 }
 
+.deus-quote-visual {
+  display: block;
+  width: 150px;
+  height: 150px;
+  object-fit: cover;
+  border: 1px solid rgba(194, 224, 228, .22);
+  border-radius: 16px;
+  filter: saturate(.82) brightness(.88);
+}
+
+.deus-quote-copy { min-width: 0; }
+.public-home-body .nabla-quote-card .nabla-big-quote { margin-right: 0; margin-left: 0; text-align: left; }
+.public-home-body .nabla-quote-card .nabla-quote-author { justify-content: flex-start; }
+
 .public-home-body .nabla-cta-box {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr);
+  align-items: center;
+  gap: 28px;
+  text-align: left;
   border-color: #c9dfe3;
   border-radius: 20px;
   background: linear-gradient(135deg, #f1f8f8 0%, #f9fbfd 65%, #edf4fa 100%);
   box-shadow: 0 20px 44px rgba(25, 52, 75, .08);
 }
+
+.deus-cta-visual {
+  display: block;
+  width: 130px;
+  height: 130px;
+  object-fit: cover;
+  border: 1px solid #cbdfe4;
+  border-radius: 16px;
+  filter: saturate(.86);
+}
+
+.public-home-body .nabla-cta-content p { margin-left: 0; }
+.public-home-body .nabla-cta-btns { justify-content: flex-start; }
 
 .public-home-body .deus-team-band {
   width: min(1240px, calc(100% - 64px));
@@ -16749,6 +16840,7 @@ button.sidebar-link {
 }
 
 @media (max-width: 760px) {
+  .public-home-body section[id] { scroll-margin-top: 76px; }
   .public-home-body .nabla-public-nav {
     top: 0;
     left: 0;
@@ -16799,6 +16891,9 @@ button.sidebar-link {
   .deus-mobile-nav-panel a:hover { background: #eef5f7; color: #0b7285 !important; }
   .deus-mobile-nav-panel .deus-mobile-nav-cta { color: #ffffff !important; background: #0d5f6d; text-align: center; }
   .deus-section-heading h2, .deus-safety-copy h2 { font-size: 38px; }
+  .deus-heading-lockup { grid-template-columns: minmax(0, 1fr) 100px; gap: 14px; }
+  .deus-heading-visual { width: 100px; height: 78px; border-radius: 11px; }
+  .deus-metrics-intro img { width: 100px; height: 60px; }
   .public-home-body .nabla-medical-showcase,
   .public-home-body .deus-product-intelligence-section,
   .public-home-body .deus-transformation-section,
@@ -16833,6 +16928,14 @@ button.sidebar-link {
   .deus-code-row b { display: none; }
   .public-home-body .deus-team-band { padding: 34px 16px 28px; }
   .public-home-body .deus-footer-links { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+  .public-home-body .nabla-quote-card,
+  .public-home-body .nabla-cta-box { grid-template-columns: 1fr; text-align: center; }
+  .deus-quote-visual,
+  .deus-cta-visual { width: 104px; height: 104px; margin: 0 auto; }
+  .public-home-body .nabla-quote-card .nabla-big-quote { text-align: center; }
+  .public-home-body .nabla-quote-card .nabla-quote-author { justify-content: center; }
+  .public-home-body .nabla-cta-content p { margin-right: auto; margin-left: auto; }
+  .public-home-body .nabla-cta-btns { justify-content: center; }
 }
 
 @media (prefers-reduced-motion: reduce) {
