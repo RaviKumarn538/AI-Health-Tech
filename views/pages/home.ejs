@@ -53,11 +53,11 @@
             <span>Sign in to DEUS Workspace</span>
             <svg class="nabla-btn-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
           </a>
-          <a class="nabla-btn-secondary" href="/auth/google?next=%2Fassistant" id="heroTryAssistantBtn">
+          <a class="nabla-btn-secondary" href="#interactiveDemo" id="heroTryAssistantBtn">
             <span class="nabla-btn-sparkle">✦</span>
             <span>See how it works</span>
           </a>
-          <a class="nabla-btn-ghost" href="/auth/google?next=%2Fupload" id="heroUploadRecordBtn">
+          <a class="nabla-btn-ghost" href="#workflow" id="heroUploadRecordBtn">
             <span>View clinical workflow</span>
             <span class="nabla-arrow">↗</span>
           </a>
@@ -232,7 +232,7 @@
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
                   Signed by <%= clinicianName %>
                 </span>
-          <a class="nabla-inline-link" href="<%= dashboardSignInUrl %>">Open in Review Workspace →</a>
+          <a class="nabla-inline-link" href="#workflow">See the workflow →</a>
               </div>
             </div>
           </div>
@@ -427,28 +427,28 @@
         <div class="nabla-pillar-icon">📋</div>
         <h3>Ambient Note Generation</h3>
         <p>Listen during clinical encounters or dictate post-visit thoughts. Turn unstructured dialogue into structured Subjective, Objective, Assessment, and Plan notes instantly.</p>
-        <a class="nabla-pillar-link" href="/auth/google?next=%2Fassistant">Explore Clinical Assistant →</a>
+        <a class="nabla-pillar-link" href="#interactiveDemo">Explore Clinical Assistant →</a>
       </div>
 
       <div class="nabla-pillar-card">
         <div class="nabla-pillar-icon">🔍</div>
         <h3>Multimodal OCR &amp; Lab Parsing</h3>
         <p>Digitize crumpled prescriptions, handwritten cardiology slips, and complex metabolic reports from PDF or PNG with confidence scores and normalized units.</p>
-        <a class="nabla-pillar-link" href="/auth/google?next=%2Fupload">Upload Clinical File →</a>
+        <a class="nabla-pillar-link" href="#workflow">View upload workflow →</a>
       </div>
 
       <div class="nabla-pillar-card">
         <div class="nabla-pillar-icon">🛡</div>
         <h3>Clinical Safety Guardrails</h3>
         <p>Proactively alert physicians to dangerous drug-drug interactions, penicillin allergy conflicts, and critical lab values (fasting glucose, HbA1c, creatinine).</p>
-        <a class="nabla-pillar-link" href="<%= dashboardSignInUrl %>">View Active Alerts →</a>
+        <a class="nabla-pillar-link" href="#interactiveDemo">View safety workflow →</a>
       </div>
 
       <div class="nabla-pillar-card">
         <div class="nabla-pillar-icon">📈</div>
         <h3>Longitudinal Patient Timelines</h3>
         <p>Access verified medical history, track blood sugar and renal function trends over time, and browse AI conversations grouped by patient.</p>
-        <a class="nabla-pillar-link" href="/auth/google?next=%2Fpatients">Browse Patient Directory →</a>
+        <a class="nabla-pillar-link" href="#capabilities">Explore patient timelines →</a>
       </div>
     </div>
   </section>
@@ -506,8 +506,8 @@
             <span>Sign in to DEUS Workspace</span>
             <span>→</span>
           </a>
-          <a class="nabla-btn-secondary" href="/auth/google?next=%2Fpatients">
-            <span>Explore after sign-in</span>
+          <a class="nabla-btn-secondary" href="#capabilities">
+            <span>Explore capabilities</span>
           </a>
         </div>
       </div>
@@ -554,7 +554,7 @@
       <a href="#workflow">Workflow</a>
       <a href="#capabilities">Capabilities</a>
               <a href="<%= dashboardSignInUrl %>">Sign in</a>
-      <a href="<%= dashboardSignInUrl %>">Workspace</a>
+      <a href="<%= dashboardSignInUrl %>">Sign in to workspace</a>
     </div>
     <div class="deus-footer-safety">
       <span aria-hidden="true">✓</span>
