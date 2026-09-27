@@ -3,9 +3,9 @@
 <section class="clinical-auth-section" id="authSection">
   <div class="auth-card-container">
     <div class="auth-card-header">
-      <div class="auth-brand-pill">✚</div>
-      <h1 class="auth-title">Clinician Authentication</h1>
-      <p class="auth-subtitle">Secure access to the clinical documentation workstation.</p>
+      <div class="auth-brand-pill">D</div>
+      <h1 class="auth-title">Sign in to DEUS</h1>
+      <p class="auth-subtitle">Secure access to the clinical intelligence workspace.</p>
     </div>
 
     <% if (typeof signedOut !== 'undefined' && signedOut) { %>
@@ -37,9 +37,9 @@
       <div class="sso-notice-box" role="alert">
         <div class="sso-notice-title">
           <span class="notice-icon">🔒</span>
-          <span>Google sign-in is not configured</span>
+          <span>Sign-in is temporarily unavailable</span>
         </div>
-        <p class="sso-notice-desc">Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI in the server environment, then restart the app.</p>
+        <p class="sso-notice-desc">Please contact the administrator to enable secure clinician sign-in.</p>
       </div>
     <% } %>
 

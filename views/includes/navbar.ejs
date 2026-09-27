@@ -94,7 +94,7 @@
           <a class="profile-menu-item" href="/audit">
             <span class="item-icon">🛡</span> Audit Trail &amp; Provenance
           </a>
-          <a class="profile-menu-item" href="/login">
+          <a class="profile-menu-item" href="/auth/google?next=%2Fdashboard">
             <span class="item-icon">⇄</span> Switch Clinician
           </a>
           <div class="profile-menu-divider"></div>
@@ -107,7 +107,7 @@
       </div>
     <% } else { %>
       <div class="navbar-auth-actions">
-        <a class="btn-navbar-signin" href="/login">
+        <a class="btn-navbar-signin" href="/auth/google?next=%2Fdashboard">
           <span class="signin-full-text">Clinician Sign In</span>
           <span class="signin-short-text">Sign In</span>
           <span class="signin-arrow">→</span>

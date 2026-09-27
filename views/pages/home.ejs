@@ -1,60 +1,135 @@
 <% layout("layouts/boilerplate") %>
 
 <div class="nabla-home-container">
+  <header class="nabla-public-nav" aria-label="Public navigation">
+    <a class="nabla-public-brand deus-public-brand" href="/" aria-label="DEUS AI-powered Clinical Intelligence home">
+      <span class="nabla-public-brand-mark">D</span>
+      <span class="deus-brand-copy"><strong>DEUS</strong><small>AI-powered Clinical Intelligence</small></span>
+    </a>
+    <nav class="nabla-public-links" aria-label="Homepage links">
+      <a href="#workflow">How it works</a>
+      <a href="#capabilities">Capabilities</a>
+      <a href="/auth/google?next=%2Fdashboard">Sign in</a>
+      <a class="nabla-public-cta" href="/auth/google?next=%2Fdashboard">Sign in to workspace <span aria-hidden="true">→</span></a>
+    </nav>
+  </header>
+
   <!-- Background Glow & Mesh -->
   <div class="nabla-ambient-glow nabla-glow-top" aria-hidden="true"></div>
   <div class="nabla-ambient-glow nabla-glow-right" aria-hidden="true"></div>
 
   <!-- HERO SECTION -->
-  <section class="nabla-hero-section">
-    <div class="nabla-badge-wrapper">
-      <div class="nabla-badge">
-        <span class="nabla-badge-dot"></span>
-        <span class="nabla-badge-text">Clinical AI Layer · Ambient Documentation</span>
-        <span class="nabla-badge-tag">2026 Edition</span>
+  <section class="nabla-hero-section" id="heroSection" aria-labelledby="heroTitle">
+    <div class="nabla-hero-stage">
+      <video class="nabla-hero-video" autoplay muted loop playsinline preload="metadata" poster="/images/clinical-hero.svg" aria-label="Clinical AI documentation workflow preview">
+        <!-- The remote source keeps the prototype visually rich; replace it with an owned MP4 in production. -->
+        <source src="https://www-assets.nabla.com/videos/home/nabla.mp4" type="video/mp4">
+      </video>
+      <div class="nabla-hero-video-fallback" aria-hidden="true"></div>
+      <div class="nabla-hero-scrim" aria-hidden="true"></div>
+
+      <div class="nabla-hero-content">
+        <div class="nabla-badge-wrapper">
+          <div class="nabla-badge">
+            <span class="nabla-badge-dot"></span>
+            <span class="nabla-badge-text">DEUS · AI-powered Clinical Intelligence</span>
+            <span class="nabla-badge-tag">Human-centered</span>
+          </div>
+        </div>
+
+        <h1 class="nabla-hero-title" id="heroTitle">
+          Clinical intelligence for the<br>
+          <span class="nabla-gradient-text">human side of care.</span>
+        </h1>
+
+        <p class="nabla-hero-subtitle">
+          DEUS turns clinical documents, conversations, and patient context into structured, reviewable intelligence—so care teams spend more time with people and less time chasing information.
+        </p>
+
+        <div class="nabla-hero-actions">
+          <a class="nabla-btn-primary" href="/auth/google?next=%2Fdashboard" id="heroSignInBtn">
+            <span>Sign in to DEUS Workspace</span>
+            <svg class="nabla-btn-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+          </a>
+          <a class="nabla-btn-secondary" href="/auth/google?next=%2Fassistant" id="heroTryAssistantBtn">
+            <span class="nabla-btn-sparkle">✦</span>
+            <span>See how it works</span>
+          </a>
+          <a class="nabla-btn-ghost" href="/auth/google?next=%2Fupload" id="heroUploadRecordBtn">
+            <span>View clinical workflow</span>
+            <span class="nabla-arrow">↗</span>
+          </a>
+        </div>
+
+        <!-- Trust indicators -->
+        <div class="nabla-trust-strip">
+          <div class="nabla-trust-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#A7F3D0" stroke-width="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+            <span>Privacy-first document handling</span>
+          </div>
+          <span class="nabla-trust-sep">·</span>
+          <div class="nabla-trust-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#A7F3D0" stroke-width="2.2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>FHIR R4 Sandbox</span>
+          </div>
+          <span class="nabla-trust-sep">·</span>
+          <div class="nabla-trust-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#A7F3D0" stroke-width="2.2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 14 14"></polyline></svg>
+            <span>Clinician-reviewed workflows</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="deus-hero-controls" aria-label="Hero media controls">
+        <button class="deus-hero-media-toggle" id="heroMediaToggle" type="button" aria-pressed="false" aria-label="Pause background video">
+          <span class="deus-hero-media-icon" aria-hidden="true">Ⅱ</span>
+          <span class="deus-hero-media-label">Pause motion</span>
+        </button>
+        <a class="deus-hero-explore-link" href="#medicalShowcaseTitle">
+          <span>Explore platform</span>
+          <span aria-hidden="true">↓</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- MEDICAL FIELD IMAGE STORY -->
+  <section class="nabla-medical-showcase" aria-labelledby="medicalShowcaseTitle">
+    <div class="nabla-medical-showcase-copy">
+      <span class="nabla-section-tag">CARE, CONNECTED</span>
+      <h2 id="medicalShowcaseTitle">Keep the human moment at the center of every visit.</h2>
+      <p>Clinical intelligence should make care feel more personal—not more technical. DEUS brings the conversation, the chart, and the next best action into one calm workflow for every member of the care team.</p>
+      <div class="nabla-showcase-proof">
+        <span class="nabla-showcase-proof-icon">✦</span>
+        <span><strong>Designed for real care</strong><br>Built around clinician review, patient context, and accountable AI.</span>
       </div>
     </div>
 
-    <h1 class="nabla-hero-title">
-      Smarter clinical workflows.<br>
-      <span class="nabla-gradient-text">Elevated care.</span>
-    </h1>
-
-    <p class="nabla-hero-subtitle">
-      The ambient clinical AI workstation trusted across care delivery. From handwritten prescriptions and metabolic panels to structured SOAP notes—restoring the human connection at the heart of medicine.
-    </p>
-
-    <div class="nabla-hero-actions">
-      <a class="nabla-btn-primary" href="/dashboard" id="heroLaunchWorkspaceBtn">
-        <span>Launch Clinic Workspace</span>
-        <svg class="nabla-btn-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
-      </a>
-      <a class="nabla-btn-secondary" href="/assistant" id="heroTryAssistantBtn">
-        <span class="nabla-btn-sparkle">✦</span>
-        <span>Try AI Assistant</span>
-      </a>
-      <a class="nabla-btn-ghost" href="/upload" id="heroUploadRecordBtn">
-        <span>Upload Record</span>
-        <span class="nabla-arrow">↗</span>
-      </a>
-    </div>
-
-    <!-- Trust indicators -->
-    <div class="nabla-trust-strip">
-      <div class="nabla-trust-item">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-        <span>Private clinical document handling</span>
-      </div>
-      <span class="nabla-trust-sep">·</span>
-      <div class="nabla-trust-item">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-        <span>FHIR R4 Sandbox</span>
-      </div>
-      <span class="nabla-trust-sep">·</span>
-      <div class="nabla-trust-item">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 14 14"></polyline></svg>
-        <span>100% Doctor-in-the-Loop</span>
-      </div>
+    <div class="nabla-medical-image-grid">
+      <figure class="nabla-medical-image-card nabla-medical-image-large">
+        <img src="https://images.unsplash.com/photo-1758691463000-08b98131daf3?auto=format&amp;fit=crop&amp;w=2400&amp;q=90" alt="Doctor showing a patient medical scan on a tablet" loading="eager" fetchpriority="high" referrerpolicy="no-referrer">
+        <figcaption>
+          <span>01</span>
+          <strong>More presence. Less paperwork.</strong>
+          <small>Ambient conversation capture</small>
+        </figcaption>
+      </figure>
+      <figure class="nabla-medical-image-card nabla-medical-image-top">
+        <img src="https://images.unsplash.com/photo-1758691463569-66de91d76452?auto=format&amp;fit=crop&amp;w=1800&amp;q=90" alt="Two clinicians reviewing a medical scan on a tablet" loading="lazy" referrerpolicy="no-referrer">
+        <figcaption>
+          <span>02</span>
+          <strong>One clear clinical story.</strong>
+          <small>Structured evidence and review</small>
+        </figcaption>
+      </figure>
+      <figure class="nabla-medical-image-card nabla-medical-image-bottom">
+        <img src="https://images.unsplash.com/photo-1758691462667-f2fb90a067ff?auto=format&amp;fit=crop&amp;w=1800&amp;q=90" alt="Doctor reviewing MRI images on a clinical tablet" loading="lazy" referrerpolicy="no-referrer">
+        <figcaption>
+          <span>03</span>
+          <strong>Confidence at sign-off.</strong>
+          <small>Human-in-the-loop safety checks</small>
+        </figcaption>
+      </figure>
     </div>
   </section>
 
@@ -64,8 +139,8 @@
       <div class="nabla-demo-header">
         <div class="nabla-demo-header-left">
           <div class="nabla-live-dot"></div>
-          <span class="nabla-demo-title">CuraClinic AI Ambient Engine</span>
-          <span class="nabla-demo-version">v2.4 Neural Clinical Core</span>
+          <span class="nabla-demo-title">DEUS Clinical Intelligence Engine</span>
+          <span class="nabla-demo-version">Reviewable workflow preview</span>
         </div>
         <div class="nabla-demo-header-right">
           <span class="nabla-mode-badge">Human-in-the-loop Active</span>
@@ -154,7 +229,7 @@
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
                   Signed by <%= clinicianName %>
                 </span>
-                <a class="nabla-inline-link" href="/dashboard">Open in Review Workspace →</a>
+          <a class="nabla-inline-link" href="/auth/google?next=%2Fdashboard">Open in Review Workspace →</a>
               </div>
             </div>
           </div>
@@ -181,7 +256,7 @@
             </div>
             <div class="nabla-output-col">
               <div class="nabla-col-label">
-                <span>Structured Neural Extraction (100% Normalized)</span>
+                <span>Structured clinical extraction</span>
               </div>
               <div class="nabla-meds-list">
                 <div class="nabla-med-item">
@@ -192,7 +267,7 @@
                   <div class="nabla-med-meta">
                     <span>Route: Oral</span> · <span>Frequency: Once daily (OD)</span> · <span>Take in morning</span>
                   </div>
-                  <span class="nabla-badge-verified">Verified 1.0</span>
+                  <span class="nabla-badge-verified">Ready for review</span>
                 </div>
                 <div class="nabla-med-item">
                   <div class="nabla-med-main">
@@ -202,7 +277,7 @@
                   <div class="nabla-med-meta">
                     <span>Route: Oral</span> · <span>Frequency: Twice daily (BD)</span> · <span>Take with meals</span>
                   </div>
-                  <span class="nabla-badge-verified">Verified 1.0</span>
+                  <span class="nabla-badge-verified">Ready for review</span>
                 </div>
                 <div class="nabla-med-item">
                   <div class="nabla-med-main">
@@ -212,7 +287,7 @@
                   <div class="nabla-med-meta">
                     <span>Route: Oral</span> · <span>Frequency: At bedtime (HS)</span> · <span>Lipid management</span>
                   </div>
-                  <span class="nabla-badge-verified">Verified 1.0</span>
+                  <span class="nabla-badge-verified">Ready for review</span>
                 </div>
               </div>
             </div>
@@ -314,34 +389,34 @@
   <section class="nabla-metrics-section">
     <div class="nabla-metrics-grid">
       <div class="nabla-metric-card">
-        <span class="nabla-metric-value">2h+</span>
-        <span class="nabla-metric-label">Saved Daily Per Physician</span>
-        <span class="nabla-metric-sub">Eliminates evening &amp; pajama charting</span>
+        <span class="nabla-metric-value">04</span>
+        <span class="nabla-metric-label">Clinical workflows</span>
+        <span class="nabla-metric-sub">Notes, documents, labs, and safety review</span>
       </div>
       <div class="nabla-metric-card">
-        <span class="nabla-metric-value">99.4%</span>
-        <span class="nabla-metric-label">Clinical Extraction Precision</span>
-        <span class="nabla-metric-sub">Verified dosages, labs, and frequencies</span>
+        <span class="nabla-metric-value">FHIR</span>
+        <span class="nabla-metric-label">Structured by design</span>
+        <span class="nabla-metric-sub">FHIR R4 sandbox-ready output</span>
       </div>
       <div class="nabla-metric-card">
-        <span class="nabla-metric-value">0 min</span>
-        <span class="nabla-metric-label">After-Hours Documentation</span>
-        <span class="nabla-metric-sub">Complete charts signed during visits</span>
+        <span class="nabla-metric-value">1:1</span>
+        <span class="nabla-metric-label">Human + AI review</span>
+        <span class="nabla-metric-sub">Clinicians stay in control of every output</span>
       </div>
       <div class="nabla-metric-card">
-        <span class="nabla-metric-value">100%</span>
-        <span class="nabla-metric-label">Doctor-in-the-Loop Control</span>
-        <span class="nabla-metric-sub">Physician reviews every record before EHR entry</span>
+        <span class="nabla-metric-value">15 MB</span>
+        <span class="nabla-metric-label">Document intake</span>
+        <span class="nabla-metric-sub">PDF, PNG, JPG, and WEBP records</span>
       </div>
     </div>
   </section>
 
   <!-- CLINICAL CAPABILITIES PILLARS -->
-  <section class="nabla-pillars-section">
+  <section class="nabla-pillars-section" id="capabilities">
     <div class="nabla-section-header">
-      <span class="nabla-section-tag">COMPREHENSIVE WORKFLOW</span>
-      <h2 class="nabla-section-title">Every clinical workflow, covered.</h2>
-      <p class="nabla-section-desc">Designed alongside practicing physicians to remove clerical friction and elevate patient care.</p>
+      <span class="nabla-section-tag">THE DEUS INTELLIGENCE LAYER</span>
+      <h2 class="nabla-section-title">One calm workspace for the clinical journey.</h2>
+      <p class="nabla-section-desc">From source document to structured record, DEUS helps care teams move with clarity while keeping clinical judgment at the center.</p>
     </div>
 
     <div class="nabla-pillars-grid">
@@ -349,34 +424,34 @@
         <div class="nabla-pillar-icon">📋</div>
         <h3>Ambient Note Generation</h3>
         <p>Listen during clinical encounters or dictate post-visit thoughts. Turn unstructured dialogue into structured Subjective, Objective, Assessment, and Plan notes instantly.</p>
-        <a class="nabla-pillar-link" href="/assistant">Explore Clinical Assistant →</a>
+        <a class="nabla-pillar-link" href="/auth/google?next=%2Fassistant">Explore Clinical Assistant →</a>
       </div>
 
       <div class="nabla-pillar-card">
         <div class="nabla-pillar-icon">🔍</div>
         <h3>Multimodal OCR &amp; Lab Parsing</h3>
         <p>Digitize crumpled prescriptions, handwritten cardiology slips, and complex metabolic reports from PDF or PNG with confidence scores and normalized units.</p>
-        <a class="nabla-pillar-link" href="/upload">Upload Clinical File →</a>
+        <a class="nabla-pillar-link" href="/auth/google?next=%2Fupload">Upload Clinical File →</a>
       </div>
 
       <div class="nabla-pillar-card">
         <div class="nabla-pillar-icon">🛡</div>
         <h3>Clinical Safety Guardrails</h3>
         <p>Proactively alert physicians to dangerous drug-drug interactions, penicillin allergy conflicts, and critical lab values (fasting glucose, HbA1c, creatinine).</p>
-        <a class="nabla-pillar-link" href="/dashboard">View Active Alerts →</a>
+        <a class="nabla-pillar-link" href="/auth/google?next=%2Fdashboard">View Active Alerts →</a>
       </div>
 
       <div class="nabla-pillar-card">
         <div class="nabla-pillar-icon">📈</div>
         <h3>Longitudinal Patient Timelines</h3>
         <p>Access verified medical history, track blood sugar and renal function trends over time, and browse AI conversations grouped by patient.</p>
-        <a class="nabla-pillar-link" href="/patients">Browse Patient Directory →</a>
+        <a class="nabla-pillar-link" href="/auth/google?next=%2Fpatients">Browse Patient Directory →</a>
       </div>
     </div>
   </section>
 
   <!-- HOW IT WORKS (3 STEPS) -->
-  <section class="nabla-workflow-section">
+  <section class="nabla-workflow-section" id="workflow">
     <div class="nabla-section-header">
       <span class="nabla-section-tag">HOW IT WORKS</span>
       <h2 class="nabla-section-title">From encounter to verified chart in three steps.</h2>
@@ -405,13 +480,13 @@
   <section class="nabla-quote-section">
     <div class="nabla-quote-card">
       <blockquote class="nabla-big-quote">
-        “CuraClinic AI has transformed our daily clinical rounds. We spend significantly less time typing and charting after hours, allowing our physicians to be 100% present with patients.”
+        “DEUS gives our team a clearer clinical story without taking the clinician out of the loop. The workflow feels calm, accountable, and ready for review.”
       </blockquote>
       <div class="nabla-quote-author">
-        <div class="nabla-author-avatar">RR</div>
+        <div class="nabla-author-avatar">DI</div>
         <div>
-          <strong><%= clinicianName %></strong>
-          <span>Chief Medical Officer, <%= clinicName %></span>
+          <strong>Clinical operations team</strong>
+          <span>DEUS AI-powered Clinical Intelligence</span>
         </div>
       </div>
     </div>
@@ -421,15 +496,15 @@
   <section class="nabla-bottom-cta">
     <div class="nabla-cta-box">
       <div class="nabla-cta-content">
-        <h2>Enjoy care again.</h2>
-        <p>Experience the ambient clinical AI workstation built for modern healthcare organizations and practicing clinicians.</p>
+        <h2>Bring clarity back to care.</h2>
+        <p>Explore DEUS—the AI-powered clinical intelligence layer for structured, reviewable healthcare workflows.</p>
         <div class="nabla-cta-btns">
-          <a class="nabla-btn-primary" href="/dashboard">
-            <span>Open Clinical Workspace</span>
+          <a class="nabla-btn-primary" href="/auth/google?next=%2Fdashboard">
+            <span>Sign in to DEUS Workspace</span>
             <span>→</span>
           </a>
-          <a class="nabla-btn-secondary" href="/patients">
-            <span>View Patients Directory</span>
+          <a class="nabla-btn-secondary" href="/auth/google?next=%2Fpatients">
+            <span>Explore after sign-in</span>
           </a>
         </div>
       </div>
@@ -437,9 +512,67 @@
   </section>
 </div>
 
+<footer class="deus-home-footer" role="contentinfo">
+  <div class="deus-home-footer-inner">
+    <div class="deus-footer-brand">
+      <div class="deus-footer-lockup">
+        <span class="nabla-public-brand-mark">D</span>
+        <span><strong>DEUS</strong><small>AI-powered Clinical Intelligence</small></span>
+      </div>
+      <p>Structured intelligence for the human side of healthcare.</p>
+    </div>
+    <div class="deus-footer-links" aria-label="DEUS footer navigation">
+      <a href="#workflow">Workflow</a>
+      <a href="#capabilities">Capabilities</a>
+              <a href="/auth/google?next=%2Fdashboard">Sign in</a>
+      <a href="/auth/google?next=%2Fdashboard">Workspace</a>
+    </div>
+    <div class="deus-footer-safety">
+      <span aria-hidden="true">✓</span>
+      <span>AI-generated output is designed for clinician review and approval.</span>
+    </div>
+  </div>
+</footer>
+
 <!-- Interactive Tab Switcher Script -->
 <script>
   document.addEventListener('DOMContentLoaded', () => {
+    const heroVideo = document.querySelector('.nabla-hero-video');
+    const heroMediaToggle = document.getElementById('heroMediaToggle');
+    const heroMediaIcon = heroMediaToggle?.querySelector('.deus-hero-media-icon');
+    const heroMediaLabel = heroMediaToggle?.querySelector('.deus-hero-media-label');
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+    const syncHeroMediaControl = () => {
+      if (!heroVideo || !heroMediaToggle) return;
+      const isPaused = heroVideo.paused;
+      heroMediaToggle.setAttribute('aria-pressed', String(isPaused));
+      heroMediaToggle.setAttribute('aria-label', isPaused ? 'Play background video' : 'Pause background video');
+      if (heroMediaIcon) heroMediaIcon.textContent = isPaused ? '▶' : 'Ⅱ';
+      if (heroMediaLabel) heroMediaLabel.textContent = isPaused ? 'Play motion' : 'Pause motion';
+    };
+
+    if (heroVideo && prefersReducedMotion.matches) heroVideo.pause();
+    syncHeroMediaControl();
+
+    heroMediaToggle?.addEventListener('click', () => {
+      if (!heroVideo) return;
+      if (heroVideo.paused) {
+        heroVideo.play().catch(() => {});
+      } else {
+        heroVideo.pause();
+      }
+      syncHeroMediaControl();
+    });
+
+    heroVideo?.addEventListener('play', syncHeroMediaControl);
+    heroVideo?.addEventListener('pause', syncHeroMediaControl);
+    prefersReducedMotion.addEventListener?.('change', (event) => {
+      if (!heroVideo) return;
+      if (event.matches) heroVideo.pause();
+      syncHeroMediaControl();
+    });
+
     const tabs = document.querySelectorAll('[data-nabla-tab]');
     const panes = document.querySelectorAll('.nabla-tab-pane');
 

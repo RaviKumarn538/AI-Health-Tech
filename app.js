@@ -39,7 +39,7 @@ const MONGO_URL = process.env.MONGO_URL || "mongodb://127.0.0.1:27017/curaclinic
 const SESSION_SECRET = process.env.SESSION_SECRET || "curaclinic-development-session-secret";
 const CLINIC_NAME = process.env.CLINIC_NAME || "AI Clinical Records";
 const TAGLINE = "Turn handwritten clinical documents into verified digital records.";
-const DEFAULT_CLINICIAN = process.env.CLINICIAN_NAME || "Dr. Sharma, MD";
+const DEFAULT_CLINICIAN = process.env.CLINICIAN_NAME || "Clinical Team";
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
 const PRODUCTION_APP_URL = process.env.APP_ORIGIN || "https://ai-health-tech.onrender.com";
@@ -56,11 +56,9 @@ const googleConfigured = Boolean(
   && !hasCredentialPlaceholder(GOOGLE_CLIENT_ID)
   && !hasCredentialPlaceholder(GOOGLE_CLIENT_SECRET)
 );
-const googleAuthRequired = String(process.env.GOOGLE_AUTH_REQUIRED || (isProduction ? "true" : "false")).toLowerCase() === "true";
-// Local bypass is opt-in only. Development must exercise the same authorization
-// boundaries as production unless LOCAL_DEMO_MODE=true is explicitly set.
-const localDemoMode = String(process.env.LOCAL_DEMO_MODE || "false").toLowerCase() === "true";
-const authenticationRequired = isProduction || googleAuthRequired || !localDemoMode;
+// The landing page is public, but every clinical workspace and API route is
+// protected. There is intentionally no local/demo authentication bypass.
+const authenticationRequired = true;
 const GOOGLE_STATE_TTL_MS = 10 * 60 * 1000;
 
 function getGoogleRedirectUri(req = null) {
@@ -267,15 +265,16 @@ app.use(async (req, res, next) => {
   const isAuth = Boolean(req.session.userId && currentUser);
   req.currentUser = currentUser;
   res.locals.isAuthenticated = isAuth;
-  res.locals.currentUser = currentUser || (localAccessAllowed() ? { name: req.session.doctorName || DEFAULT_CLINICIAN, role: "DOCTOR", email: "dr.sharma@curaclinic.health" } : null);
+  res.locals.currentUser = currentUser;
   next();
 });
 
 app.use((req, res, next) => {
   const publicPaths = new Set(["/", "/login", "/auth/google", "/auth/google/callback", "/health"]);
-  if (authenticationRequired && !req.session.userId && !publicPaths.has(req.path)) {
+  if (authenticationRequired && !req.currentUser && !publicPaths.has(req.path)) {
     if (req.path.startsWith("/api/")) return res.status(401).json({ error: "Sign in as an authorized clinician to continue." });
-    return res.redirect(`/login?next=${encodeURIComponent(req.originalUrl)}`);
+    const authEntryPath = googleConfigured ? "/auth/google" : "/login";
+    return res.redirect(authEntryPath + "?next=" + encodeURIComponent(req.originalUrl));
   }
   next();
 });
@@ -380,7 +379,7 @@ function escapeRegExp(value) {
 }
 
 function localAccessAllowed() {
-  return localDemoMode && !googleAuthRequired && !isProduction;
+  return false;
 }
 
 function patientAccessQuery(req) {
@@ -704,11 +703,12 @@ async function seedDemoData() {
 }
 
 app.get("/", asyncHandler(async (req, res) => {
-  if (req.session.userId || localAccessAllowed()) {
+  if (req.currentUser) {
     return res.redirect("/dashboard");
   }
   res.render("pages/home", {
-    pageTitle: "Turn handwritten clinical documents into verified digital records",
+    pageTitle: "Clinical intelligence for the human side of care",
+    brandName: "DEUS — AI-powered Clinical Intelligence",
   });
 }));
 
@@ -717,13 +717,19 @@ app.get("/health", (_req, res) => {
 });
 
 app.get("/login", (req, res) => {
+  const nextUrl = safeNextPath(req.query.next);
+  if (googleConfigured) {
+    return res.redirect("/auth/google?next=" + encodeURIComponent(nextUrl));
+  }
+
   const signedOut = req.query.signed_out === "true";
   res.render("pages/login", {
-    pageTitle: "Sign in with Google",
+    pageTitle: "Sign in to DEUS",
+    brandName: "DEUS — AI-powered Clinical Intelligence",
     error: req.query.error || null,
     signedOut,
     googleConfigured,
-    nextUrl: req.query.next || "/dashboard",
+    nextUrl,
   });
 });
 
@@ -733,7 +739,16 @@ app.post("/signup", (_req, res) => res.redirect("/login?error=Use+Sign+in+with+G
 
 app.get("/auth/google", asyncHandler(async (req, res) => {
   const googleOAuthClient = getOAuthClient(req);
-  if (!googleOAuthClient) return res.redirect("/login?error=Google+authentication+is+not+configured+yet.");
+  if (!googleOAuthClient) {
+    return res.status(503).render("pages/login", {
+      pageTitle: "Sign in to DEUS",
+      brandName: "DEUS — AI-powered Clinical Intelligence",
+      error: "Sign-in is temporarily unavailable. Please contact the administrator.",
+      signedOut: false,
+      googleConfigured: false,
+      nextUrl: safeNextPath(req.query.next),
+    });
+  }
   const state = crypto.randomBytes(24).toString("hex");
   req.session.googleOAuthState = {
     value: state,
@@ -748,7 +763,7 @@ app.get("/auth/google", asyncHandler(async (req, res) => {
 
 app.get("/auth/google/callback", asyncHandler(async (req, res) => {
   const googleOAuthClient = getOAuthClient(req);
-  if (!googleOAuthClient) return res.redirect("/login?error=Google+authentication+is+not+configured+yet.");
+  if (!googleOAuthClient) return res.redirect("/login?error=Sign-in+is+temporarily+unavailable.");
   const oauthState = req.session.googleOAuthState;
   const expectedState = typeof oauthState === "string" ? oauthState : oauthState?.value;
   const stateCreatedAt = typeof oauthState === "string" ? 0 : Number(oauthState?.createdAt || 0);
