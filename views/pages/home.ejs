@@ -9,11 +9,27 @@
       <span class="deus-brand-copy"><strong>DEUS</strong><small>AI-powered Clinical Intelligence</small></span>
     </a>
     <nav class="nabla-public-links" aria-label="Homepage links">
+      <a href="#interactiveDemo">Platform</a>
+      <a href="#capabilities">Clinical Intelligence</a>
       <a href="#workflow">How it works</a>
-      <a href="#capabilities">Capabilities</a>
+      <a href="#security">Security</a>
+      <a href="#team">Team</a>
       <a href="<%= dashboardSignInUrl %>">Sign in</a>
-      <a class="nabla-public-cta" href="<%= dashboardSignInUrl %>">Sign in to workspace <span aria-hidden="true">→</span></a>
+      <a class="nabla-public-cta" href="<%= dashboardSignInUrl %>">Open Workspace <span aria-hidden="true">→</span></a>
     </nav>
+    <button class="deus-mobile-nav-toggle" id="deusMobileNavToggle" type="button" aria-expanded="false" aria-controls="deusMobileNavPanel">
+      <span class="deus-mobile-nav-label">Menu</span>
+      <span class="deus-mobile-nav-bars" aria-hidden="true"><i></i><i></i></span>
+    </button>
+    <div class="deus-mobile-nav-panel" id="deusMobileNavPanel" hidden>
+      <a href="#interactiveDemo">Platform</a>
+      <a href="#capabilities">Clinical Intelligence</a>
+      <a href="#workflow">How it works</a>
+      <a href="#security">Security</a>
+      <a href="#team">Team</a>
+      <a href="<%= dashboardSignInUrl %>">Sign in</a>
+      <a class="deus-mobile-nav-cta" href="<%= dashboardSignInUrl %>">Open Workspace <span aria-hidden="true">→</span></a>
+    </div>
   </header>
 
   <!-- Background Glow & Mesh -->
@@ -136,8 +152,13 @@
     </div>
   </section>
 
-  <!-- INTERACTIVE PRODUCT SIMULATOR (THE NABLA DEMO CARD) -->
-  <section class="nabla-demo-section" id="interactiveDemo">
+  <!-- PRODUCT INTELLIGENCE WORKSTATION -->
+  <section class="nabla-demo-section deus-product-intelligence-section" id="interactiveDemo" aria-labelledby="productIntelligenceTitle">
+    <div class="deus-section-heading deus-section-heading-left">
+      <span class="deus-section-eyebrow">PRODUCT INTELLIGENCE</span>
+      <h2 id="productIntelligenceTitle">A clinical workstation built for review.</h2>
+      <p>DEUS turns the raw signal of a visit into structured fields, safety signals, and a record a clinician can stand behind.</p>
+    </div>
     <div class="nabla-demo-card">
       <div class="nabla-demo-header">
         <div class="nabla-demo-header-left">
@@ -388,6 +409,115 @@
     </div>
   </section>
 
+  <!-- CLINICAL DOCUMENT INTELLIGENCE -->
+  <section class="deus-transformation-section deus-premium-section" aria-labelledby="transformationTitle">
+    <div class="deus-section-heading">
+      <span class="deus-section-eyebrow">CLINICAL DOCUMENT INTELLIGENCE</span>
+      <h2 id="transformationTitle">From source document to sign-off.</h2>
+      <p>Make the transformation visible: every extracted field has a source, a confidence signal, and a clinician at the final gate.</p>
+    </div>
+    <div class="deus-transformation-flow" role="list" aria-label="Clinical document transformation workflow">
+      <article class="deus-transformation-step" role="listitem">
+        <div class="deus-transformation-step-head"><span>01</span><small>SOURCE DOCUMENT</small></div>
+        <div class="deus-document-sheet" aria-label="Sample prescription source document">
+          <div class="deus-document-topline"><span>RX / CARDIOLOGY OPD</span><span>CC-1001</span></div>
+          <strong>Clinical prescription</strong>
+          <div class="deus-document-line wide"></div>
+          <div class="deus-document-line"></div>
+          <div class="deus-document-line short"></div>
+          <div class="deus-document-handwriting">Telmisartan 40 mg<br>Metformin 500 mg</div>
+        </div>
+        <p>Prescription, lab report, or conversation.</p>
+      </article>
+      <span class="deus-transformation-arrow" aria-hidden="true">→</span>
+      <article class="deus-transformation-step" role="listitem">
+        <div class="deus-transformation-step-head"><span>02</span><small>AI EXTRACTION</small></div>
+        <div class="deus-extraction-sheet">
+          <div class="deus-extraction-row"><span>Medication</span><strong>Telmisartan 40 mg</strong><em>98.6%</em></div>
+          <div class="deus-extraction-row"><span>Frequency</span><strong>Once daily · Oral</strong><em>97.9%</em></div>
+          <div class="deus-extraction-row is-review"><span>Allergy signal</span><strong>Penicillin · Review</strong><em>Needs review</em></div>
+        </div>
+        <p>Fields normalize with confidence-aware extraction.</p>
+      </article>
+      <span class="deus-transformation-arrow" aria-hidden="true">→</span>
+      <article class="deus-transformation-step" role="listitem">
+        <div class="deus-transformation-step-head"><span>03</span><small>STRUCTURED RECORD</small></div>
+        <div class="deus-record-sheet">
+          <div class="deus-record-banner"><span>FHIR R4</span><strong>Clinical record</strong></div>
+          <div class="deus-record-grid"><span>Patient</span><strong>Rajesh Sharma</strong><span>Encounter</span><strong>Diabetes follow-up</strong><span>Source</span><strong>Verified fields · 12</strong></div>
+        </div>
+        <p>Evidence becomes a reviewable clinical story.</p>
+      </article>
+      <span class="deus-transformation-arrow" aria-hidden="true">→</span>
+      <article class="deus-transformation-step" role="listitem">
+        <div class="deus-transformation-step-head"><span>04</span><small>CLINICIAN SIGN-OFF</small></div>
+        <div class="deus-signoff-sheet">
+          <span class="deus-signoff-check" aria-hidden="true">✓</span>
+          <strong>Verified clinical record</strong>
+          <small>Ready for EHR entry</small>
+          <span class="deus-signoff-meta">Human-in-the-loop · Audit trail created</span>
+        </div>
+        <p>The clinician reviews, edits, and approves.</p>
+      </article>
+    </div>
+    <div class="deus-clinical-note"><span aria-hidden="true">✦</span><span>AI organizes the evidence. Clinical judgment remains the decision.</span></div>
+  </section>
+
+  <!-- SAFETY & GUARDRAILS -->
+  <section class="deus-safety-section deus-premium-section" id="security" aria-labelledby="safetyTitle">
+    <div class="deus-safety-copy">
+      <span class="deus-section-eyebrow">SAFETY / GUARDRAILS</span>
+      <h2 id="safetyTitle">AI surfaces signals. Clinicians make decisions.</h2>
+      <p>Every output is a decision-support draft. DEUS highlights conflicts, abnormal values, and uncertainty so the care team can review the right thing at the right time.</p>
+      <a class="deus-text-link" href="#interactiveDemo">Explore safety workflows <span aria-hidden="true">↗</span></a>
+    </div>
+    <div class="deus-guardrail-console" aria-label="Clinical safety guardrail preview">
+      <div class="deus-console-bar"><span><i></i> SAFETY REVIEW QUEUE</span><strong>03 signals</strong></div>
+      <div class="deus-guardrail-row deus-guardrail-row-critical">
+        <span class="deus-guardrail-icon">!</span>
+        <div><strong>Allergy conflict detected</strong><p>Amoxicillin overlaps with known Penicillin anaphylaxis.</p></div>
+        <span class="deus-guardrail-badge critical">Review</span>
+      </div>
+      <div class="deus-guardrail-row deus-guardrail-row-warning">
+        <span class="deus-guardrail-icon">↗</span>
+        <div><strong>Critical lab value flagged</strong><p>HbA1c 7.8% · outside configured reference range.</p></div>
+        <span class="deus-guardrail-badge warning">Signal</span>
+      </div>
+      <div class="deus-guardrail-row deus-guardrail-row-safe">
+        <span class="deus-guardrail-icon">✓</span>
+        <div><strong>Extraction confidence</strong><p>12 of 14 fields meet the review threshold.</p></div>
+        <span class="deus-guardrail-badge safe">98.6%</span>
+      </div>
+      <div class="deus-console-footer"><span>Clinician review required</span><span>Audit trail ready <b>✓</b></span></div>
+    </div>
+  </section>
+
+  <!-- LONGITUDINAL PATIENT CONTEXT -->
+  <section class="deus-timeline-section deus-premium-section" aria-labelledby="timelineTitle">
+    <div class="deus-section-heading deus-section-heading-left">
+      <span class="deus-section-eyebrow">LONGITUDINAL PATIENT CONTEXT</span>
+      <h2 id="timelineTitle">Turn fragmented records into one continuous clinical story.</h2>
+      <p>Keep consultations, prescriptions, labs, diagnoses, and follow-up events connected in one verified patient view.</p>
+    </div>
+    <div class="deus-timeline-shell">
+      <aside class="deus-patient-summary">
+        <span class="deus-summary-label">PATIENT CONTEXT</span>
+        <div class="deus-patient-avatar">RS</div>
+        <h3>Rajesh Sharma</h3>
+        <p>CC-1001 · Type 2 diabetes · Hypertension</p>
+        <div class="deus-patient-stat"><span>Last reviewed</span><strong>Today · 10:42</strong></div>
+        <div class="deus-patient-stat"><span>Verified records</span><strong>12 documents</strong></div>
+        <span class="deus-patient-state"><i></i> Review complete</span>
+      </aside>
+      <div class="deus-clinical-timeline" aria-label="Patient clinical timeline">
+        <div class="deus-timeline-event"><span class="deus-timeline-dot is-current"></span><div><small>Today · 10:42</small><strong>Diabetes follow-up consultation</strong><p>Ambient note captured · SOAP draft reviewed by clinician</p></div><em>Verified</em></div>
+        <div class="deus-timeline-event"><span class="deus-timeline-dot is-lab"></span><div><small>12 Jun 2025 · Laboratory</small><strong>Metabolic panel parsed</strong><p>HbA1c 7.8% · Creatinine 1.35 mg/dL</p></div><em class="is-review">Review</em></div>
+        <div class="deus-timeline-event"><span class="deus-timeline-dot"></span><div><small>28 May 2025 · Prescription</small><strong>Medication plan updated</strong><p>Telmisartan 40 mg · Metformin 500 mg</p></div><em>Verified</em></div>
+        <div class="deus-timeline-event"><span class="deus-timeline-dot"></span><div><small>03 Apr 2025 · Conversation</small><strong>Follow-up plan recorded</strong><p>AI conversation grouped with patient context</p></div><em>Indexed</em></div>
+      </div>
+    </div>
+  </section>
+
   <!-- METRICS SECTION (NABLA STYLE) -->
   <section class="nabla-metrics-section">
     <div class="nabla-metrics-grid">
@@ -411,6 +541,36 @@
         <span class="nabla-metric-label">Document intake</span>
         <span class="nabla-metric-sub">PDF, PNG, JPG, and WEBP records</span>
       </div>
+    </div>
+  </section>
+
+  <!-- FHIR / INTEGRATION + TRUST -->
+  <section class="deus-enterprise-section deus-premium-section" aria-labelledby="enterpriseTitle">
+    <div class="deus-enterprise-panel deus-integration-panel">
+      <div class="deus-section-heading deus-section-heading-left">
+        <span class="deus-section-eyebrow">FHIR R4 / INTEGRATION</span>
+        <h2 id="enterpriseTitle">Structured for the systems care teams already use.</h2>
+        <p>DEUS is designed around structured clinical data, secure document handling, and a traceable path from source evidence to record.</p>
+      </div>
+      <div class="deus-integration-visual" aria-label="FHIR integration preview">
+        <div class="deus-integration-top"><span>DEUS / FHIR R4</span><strong>Sandbox ready</strong></div>
+        <div class="deus-code-row"><span>01</span><code>Observation</code><b>HbA1c</b><em>7.8 %</em></div>
+        <div class="deus-code-row"><span>02</span><code>MedicationRequest</code><b>Telmisartan</b><em>40 mg</em></div>
+        <div class="deus-code-row"><span>03</span><code>Provenance</code><b>Clinician review</b><em>signed</em></div>
+        <div class="deus-integration-foot"><span>Structured clinical data</span><span>Audit trail attached</span></div>
+      </div>
+    </div>
+    <div class="deus-enterprise-panel deus-trust-panel" id="trust">
+      <span class="deus-section-eyebrow">TRUST BY DESIGN</span>
+      <h3>Control is part of the product.</h3>
+      <div class="deus-trust-list">
+        <div><span>01</span><strong>Privacy-first document handling</strong></div>
+        <div><span>02</span><strong>Clinician-reviewed workflow</strong></div>
+        <div><span>03</span><strong>Complete audit trail</strong></div>
+        <div><span>04</span><strong>Controlled access to records</strong></div>
+        <div><span>05</span><strong>Time-limited secure delivery</strong></div>
+      </div>
+      <p class="deus-trust-disclaimer">AI-generated outputs remain drafts until a clinician reviews and approves them.</p>
     </div>
   </section>
 
@@ -475,6 +635,7 @@
         <span class="nabla-step-num">03</span>
         <h4>Doctor Sign-Off &amp; EHR Lock</h4>
         <p>Clinician reviews extracted fields, edits if needed, and signs off. Creates an immutable medical record and complete audit trail entry.</p>
+        <span class="deus-step-status"><span aria-hidden="true">✓</span> Verified clinical record</span>
       </div>
     </div>
   </section>
@@ -514,7 +675,7 @@
     </div>
   </section>
 
-  <section class="deus-team-band" aria-labelledby="behindWebsiteTitle">
+  <section class="deus-team-band" id="team" aria-labelledby="behindWebsiteTitle">
     <div class="deus-team-intro">
       <span class="deus-team-kicker">BEHIND THIS WEBSITE</span>
       <h2 id="behindWebsiteTitle">Team DEUS</h2>
@@ -551,14 +712,13 @@
       <p>Structured intelligence for the human side of healthcare.</p>
     </div>
     <div class="deus-footer-links" aria-label="DEUS footer navigation">
-      <a href="#workflow">Workflow</a>
-      <a href="#capabilities">Capabilities</a>
-              <a href="<%= dashboardSignInUrl %>">Sign in</a>
-      <a href="<%= dashboardSignInUrl %>">Sign in to workspace</a>
+      <span class="deus-footer-link-group"><strong>Platform</strong><a href="#interactiveDemo">Clinical Intelligence</a><a href="#workflow">How it works</a><a href="#capabilities">Capabilities</a></span>
+      <span class="deus-footer-link-group"><strong>Trust</strong><span>Privacy-first handling</span><span>Secure document delivery</span><a href="#security">Security</a></span>
+      <span class="deus-footer-link-group"><strong>Team</strong><a href="#team">Team DEUS</a><a href="<%= dashboardSignInUrl %>">Sign in</a><a href="<%= dashboardSignInUrl %>">Open Workspace</a></span>
     </div>
     <div class="deus-footer-safety">
       <span aria-hidden="true">✓</span>
-      <span>AI-generated output is designed for clinician review and approval.</span>
+      <span>FHIR R4 · Sandbox<br>AI-generated output is designed for clinician review and approval.</span>
     </div>
   </div>
 </footer>
@@ -571,8 +731,28 @@
     const heroMediaToggle = document.getElementById('heroMediaToggle');
     const heroMediaIcon = heroMediaToggle?.querySelector('.deus-hero-media-icon');
     const heroMediaLabel = heroMediaToggle?.querySelector('.deus-hero-media-label');
+    const mobileNavToggle = document.getElementById('deusMobileNavToggle');
+    const mobileNavPanel = document.getElementById('deusMobileNavPanel');
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     let heroVideoLoaded = false;
+
+    const closeMobileNav = () => {
+      if (!mobileNavToggle || !mobileNavPanel) return;
+      mobileNavToggle.setAttribute('aria-expanded', 'false');
+      mobileNavPanel.hidden = true;
+    };
+
+    mobileNavToggle?.addEventListener('click', () => {
+      if (!mobileNavPanel) return;
+      const isOpen = mobileNavToggle.getAttribute('aria-expanded') === 'true';
+      mobileNavToggle.setAttribute('aria-expanded', String(!isOpen));
+      mobileNavPanel.hidden = isOpen;
+    });
+
+    mobileNavPanel?.querySelectorAll('a').forEach((link) => link.addEventListener('click', closeMobileNav));
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closeMobileNav();
+    });
 
     const loadHeroVideo = () => {
       if (!heroVideo || !heroVideoSource || heroVideoLoaded) return;
