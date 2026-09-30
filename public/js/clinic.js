@@ -303,7 +303,7 @@
         if (data.suggestedQuery) {
           html += `
             <div class="search-dropdown-typo">
-              💡 Did you mean: <a href="javascript:void(0)" class="typo-apply-link" data-query="${escapeHtml(data.suggestedQuery)}"><strong>${escapeHtml(data.suggestedQuery)}</strong></a>?
+              💡 Did you mean: <a href="#" class="typo-apply-link" data-query="${escapeHtml(data.suggestedQuery)}"><strong>${escapeHtml(data.suggestedQuery)}</strong></a>?
             </div>
           `;
         }
@@ -311,11 +311,12 @@
         if (data.results && data.results.length) {
           html += `<div class="search-results-list" role="listbox">`;
           data.results.slice(0, 8).forEach((item, idx) => {
-            const badgeClass = (item.entityType || '').toLowerCase();
+            const entityType = String(item.entityType || 'RECORD').toUpperCase();
+            const badgeClass = ['PATIENT', 'MEDICATION', 'LAB_TEST', 'DOCUMENT', 'RECORD'].includes(entityType) ? entityType.toLowerCase() : 'record';
             html += `
-              <a href="${item.url}" class="search-result-item dsa-result-item" data-index="${idx}" role="option">
+              <a href="${escapeHtml(item.url || '#')}" class="search-result-item dsa-result-item" data-index="${idx}" role="option">
                 <div class="result-item-main">
-                  <span class="dsa-entity-pill ${badgeClass}">${item.entityType || 'RECORD'}</span>
+                  <span class="dsa-entity-pill ${badgeClass}">${escapeHtml(entityType)}</span>
                   <div class="result-title-group">
                     <strong class="result-title">${escapeHtml(item.title)}</strong>
                     <small class="result-sub">${escapeHtml(item.subtitle)}</small>
@@ -792,26 +793,145 @@
       stamp.style.color = status === 'clinician_corrected' ? '#0284c7' : status === 'clinician_verified' ? '#15803d' : '#d97706';
     });
 
+    // Exception-based verification: keep the full extraction intact, but put
+    // only low-confidence, unresolved, or empty fields in the initial queue.
+    const exceptionAttentionCount = $('#exceptionAttentionCount');
+    const exceptionAttentionCountSecondary = $('#exceptionAttentionCountSecondary');
+    const exceptionTotalCount = $('#exceptionTotalCount');
+    const exceptionProcessedCount = $('#exceptionProcessedCount');
+    const exceptionDoctorReviewedCount = $('#exceptionDoctorReviewedCount');
+    const exceptionReviewStatus = $('#exceptionReviewStatus');
+    const exceptionRemainingMessage = $('#exceptionRemainingMessage');
+    const approvalReadinessMessage = $('#approvalReadinessMessage');
+    const btnApproveFinal = $('#btnApproveFinal');
+    const chkExceptionsReviewed = $('#chkExceptionsReviewed');
+    const doctorNameInput = $('#doctorNameInput');
+    const btnReviewAttentionOnly = $('#btnReviewAttentionOnly');
+    const btnReviewAllFields = $('#btnReviewAllFields');
+    const isAttentionCard = (card) => {
+      const status = String(card.dataset.status || '').toLowerCase();
+      const confidence = Number(card.dataset.confidence || 0);
+      const value = String(card.dataset.aiValue || card.dataset.currentValue || '').trim();
+      if (['clinician_verified', 'clinician_corrected'].includes(status) && value) return false;
+      return !value || confidence < 80 || ['review_required', 'unresolved', 'unclear'].includes(status);
+    };
+    const getAttentionCards = () => entityCards.filter(isAttentionCard);
+    let attentionOnlyMode = true;
+    const setSystemCheck = (id, complete) => {
+      const row = $(`#${id}`);
+      if (!row) return;
+      row.classList.toggle('is-complete', Boolean(complete));
+      row.classList.toggle('is-pending', !complete);
+      const icon = $('.system-check-icon', row);
+      if (icon) icon.textContent = complete ? '✓' : '•';
+    };
+    const updateApprovalState = (attentionCount) => {
+      const patientMatched = Boolean(window.clinicalWorkspaceData?.patientId);
+      const fieldsChecked = entityCards.length > 0;
+      const evidenceAvailable = Boolean(boundingBoxes.length || sourceDocumentImage || $('.source-document-pdf'));
+      const exceptionsResolved = attentionCount === 0;
+      const doctorConfirmed = Boolean(chkExceptionsReviewed?.checked);
+      const doctorNamed = Boolean(doctorNameInput?.value.trim());
+
+      setSystemCheck('systemCheckPatient', patientMatched);
+      setSystemCheck('systemCheckFields', fieldsChecked);
+      setSystemCheck('systemCheckExtraction', fieldsChecked);
+      setSystemCheck('systemCheckEvidence', evidenceAvailable);
+      setSystemCheck('systemCheckUnresolved', exceptionsResolved);
+
+      if (exceptionRemainingMessage) {
+        exceptionRemainingMessage.textContent = attentionCount
+          ? `${attentionCount} item${attentionCount === 1 ? '' : 's'} still require${attentionCount === 1 ? 's' : ''} your attention in the AI Review panel.`
+          : 'All required exceptions have been resolved. You can complete the final doctor confirmation.';
+      }
+      if (approvalReadinessMessage) {
+        approvalReadinessMessage.textContent = attentionCount
+          ? `${attentionCount} item${attentionCount === 1 ? '' : 's'} still require${attentionCount === 1 ? 's' : ''} your attention.`
+          : (doctorConfirmed ? 'All required exceptions have been resolved.' : 'Check the doctor confirmation to approve this record.');
+        approvalReadinessMessage.classList.toggle('is-ready', !attentionCount && doctorConfirmed);
+      }
+      if (btnApproveFinal) {
+        btnApproveFinal.disabled = Boolean(attentionCount || !doctorConfirmed || !patientMatched || !doctorNamed);
+      }
+    };
+    const updateExceptionSummary = () => {
+      const attentionCards = getAttentionCards();
+      entityCards.forEach((card) => {
+        card.hidden = attentionOnlyMode && !isAttentionCard(card);
+        card.classList.toggle('is-exception-field', isAttentionCard(card));
+        card.classList.toggle('is-validated-field', !isAttentionCard(card));
+        card.setAttribute('aria-disabled', String(attentionOnlyMode && !isAttentionCard(card)));
+      });
+      if (exceptionAttentionCount) exceptionAttentionCount.textContent = attentionCards.length;
+      if (exceptionAttentionCountSecondary) exceptionAttentionCountSecondary.textContent = attentionCards.length;
+      if (exceptionTotalCount) exceptionTotalCount.textContent = entityCards.length;
+      if (exceptionProcessedCount) exceptionProcessedCount.textContent = Math.max(0, entityCards.length - attentionCards.length);
+      if (exceptionDoctorReviewedCount) {
+        exceptionDoctorReviewedCount.textContent = entityCards.filter((card) => {
+          const status = String(card.dataset.status || '').toLowerCase();
+          return status === 'clinician_verified' || status === 'clinician_corrected';
+        }).length;
+      }
+      if (exceptionReviewStatus) exceptionReviewStatus.textContent = attentionCards.length
+        ? 'Review only these exceptions; validated fields remain available below.'
+        : 'All fields are resolved. The clinical record is ready for final confirmation.';
+      if (btnReviewAttentionOnly) btnReviewAttentionOnly.textContent = `Review ${attentionCards.length} Exception${attentionCards.length === 1 ? '' : 's'}`;
+      btnReviewAttentionOnly?.classList.toggle('is-active', attentionOnlyMode);
+      btnReviewAllFields?.classList.toggle('is-active', !attentionOnlyMode);
+      btnReviewAttentionOnly?.setAttribute('aria-pressed', String(attentionOnlyMode));
+      btnReviewAllFields?.setAttribute('aria-pressed', String(!attentionOnlyMode));
+      updateApprovalState(attentionCards.length);
+      return attentionCards;
+    };
+    btnReviewAttentionOnly?.addEventListener('click', () => {
+      attentionOnlyMode = true;
+      updateExceptionSummary();
+    });
+    btnReviewAllFields?.addEventListener('click', () => {
+      attentionOnlyMode = false;
+      updateExceptionSummary();
+    });
+    const refreshExceptionQueue = (selectNext = false) => {
+      const attentionCards = updateExceptionSummary();
+      if (selectNext && attentionOnlyMode) {
+        const nextCard = attentionCards[0] || null;
+        if (nextCard) selectEntityCard(nextCard, true);
+      }
+      return attentionCards;
+    };
+    const initialAttentionCards = refreshExceptionQueue();
+    activeSelectedCard = initialAttentionCards[0] || entityCards[0] || null;
+
     function focusBoundingBox(card) {
       if (!card) return;
       let boundingBox = null;
       try { boundingBox = JSON.parse(card.dataset.boundingBox || 'null'); } catch { boundingBox = null; }
       if (!Array.isArray(boundingBox) || !viewport) return;
       const [ymin, xmin, ymax, xmax] = boundingBox.map(Number);
+      highlightsVisible = true;
+      if (highlightsOverlay) highlightsOverlay.style.display = 'block';
+      if (btnToggleHighlights) btnToggleHighlights.classList.add('is-active');
+      currentScale = Math.max(currentScale, 1.25);
+      updateTransform();
       const stageHeight = stage?.clientHeight || 800;
-      const targetY = (ymin / 100) * stageHeight;
+      const stageWidth = stage?.clientWidth || 600;
+      const targetY = (ymin / 100) * stageHeight * currentScale;
+      const targetX = (xmin / 100) * stageWidth * currentScale;
       viewport.scrollTo({
         top: Math.max(0, targetY - 120),
+        left: Math.max(0, targetX - 160),
         behavior: 'smooth',
       });
     }
 
     btnFocusSource?.addEventListener('click', () => {
+      if (activeSelectedCard) selectEntityCard(activeSelectedCard, false);
       focusBoundingBox(activeSelectedCard);
     });
 
     function selectEntityCard(card, shouldScrollCard = false) {
       if (!card) return;
+      if (attentionOnlyMode && !isAttentionCard(card)) return;
       activeSelectedCard = card;
 
       entityCards.forEach((c) => c.classList.remove('is-selected'));
@@ -923,7 +1043,7 @@
       updateFieldState(activeSelectedCard, 'clinician_verified', oldVal, acceptedValue);
 
       syncPayloadInputs();
-      selectEntityCard(activeSelectedCard);
+      refreshExceptionQueue(true);
 
       btnAcceptAi.textContent = '✓ Accepted';
       setTimeout(() => { btnAcceptAi.textContent = '✓ Accept'; }, 1200);
@@ -988,7 +1108,7 @@
       updateFieldState(activeSelectedCard, 'clinician_corrected', oldVal, newVal);
 
       syncPayloadInputs();
-      selectEntityCard(activeSelectedCard);
+      refreshExceptionQueue(true);
 
       btnUpdateField.textContent = '✓ Saved';
       setTimeout(() => { btnUpdateField.textContent = '✎ Apply Correction'; }, 1200);
@@ -1014,7 +1134,7 @@
       updateFieldState(activeSelectedCard, 'unresolved', oldVal, oldVal);
 
       syncPayloadInputs();
-      selectEntityCard(activeSelectedCard);
+      refreshExceptionQueue(false);
 
       btnMarkUnclear.textContent = '⚠ Flagged';
       setTimeout(() => { btnMarkUnclear.textContent = '⚠ Mark Unclear'; }, 1200);
@@ -1179,14 +1299,11 @@
     $('#btnSaveDraftTop')?.addEventListener('click', saveDraftAction);
     $('#btnSaveDraftZone3')?.addEventListener('click', saveDraftAction);
 
-    // Strict Approval Validation
+    // Exception-first approval validation
     const reviewForm = $('#reviewForm');
     const handleApprovalSubmit = (e) => {
       syncPayloadInputs();
-      const chk1 = $('#chkIdentity');
-      const chk2 = $('#chkDosage');
-      const chk3 = $('#chkFlags');
-      const doctorInput = $('#doctorNameInput');
+      const attentionCards = getAttentionCards();
 
       if (!window.clinicalWorkspaceData?.patientId) {
         if (e) e.preventDefault();
@@ -1194,16 +1311,30 @@
         return false;
       }
 
-      if ((chk1 && !chk1.checked) || (chk2 && !chk2.checked) || (chk3 && !chk3.checked)) {
+      if (attentionCards.length) {
         if (e) e.preventDefault();
-        alert('Mandatory safety check: Please verify all three pre-approval validation checkboxes before signing.');
+        attentionOnlyMode = true;
+        refreshExceptionQueue(false);
+        const firstException = attentionCards[0];
+        if (firstException) {
+          selectEntityCard(firstException, true);
+          focusBoundingBox(firstException);
+        }
+        alert(`${attentionCards.length} item${attentionCards.length === 1 ? '' : 's'} still require${attentionCards.length === 1 ? 's' : ''} your attention.`);
         return false;
       }
 
-      if (doctorInput && !doctorInput.value.trim()) {
+      if (!chkExceptionsReviewed?.checked) {
+        if (e) e.preventDefault();
+        alert('Confirm that you reviewed the highlighted exceptions before signing.');
+        chkExceptionsReviewed?.focus();
+        return false;
+      }
+
+      if (doctorNameInput && !doctorNameInput.value.trim()) {
         if (e) e.preventDefault();
         alert('A signing healthcare professional name is required.');
-        doctorInput.focus();
+        doctorNameInput.focus();
         return false;
       }
 
@@ -1213,12 +1344,15 @@
     reviewForm?.addEventListener('submit', (e) => {
       if (!handleApprovalSubmit(e)) e.preventDefault();
     });
+    chkExceptionsReviewed?.addEventListener('change', () => updateApprovalState(getAttentionCards().length));
+    doctorNameInput?.addEventListener('input', () => updateApprovalState(getAttentionCards().length));
 
     // Select initial card
-    if (entityCards[0]) {
-      selectEntityCard(entityCards[0], false);
+    if (activeSelectedCard) {
+      selectEntityCard(activeSelectedCard, false);
     }
     syncPayloadInputs();
+    updateApprovalState(getAttentionCards().length);
   }
 
   // -------------------------------------------------------------
@@ -1250,6 +1384,12 @@
       });
     });
   }
+  $$('.patient-history-open-timeline, .patient-history-open-tab').forEach((button) => {
+    button.addEventListener('click', () => {
+      const target = patientTabs.find((tab) => tab.dataset.tabTarget === button.dataset.tabTarget);
+      target?.click();
+    });
+  });
 
   // Contextual Ask AI Drawer
   const openAskAiBtn = $('#btnOpenAskAiDrawer');
@@ -1325,6 +1465,51 @@
         const p = chip.dataset.prompt;
         if (p) sendDrawerQuestion(p);
       });
+    });
+  }
+
+  // Patient History Intelligence: local search and date filtering for the
+  // generated longitudinal timeline. This never changes source records.
+  const historyItems = $$('#patientHistoryTimeline [data-history-item]');
+  const historySearch = $('#patientHistorySearch');
+  const historyType = $('#patientHistoryType');
+  const historyFrom = $('#patientHistoryFrom');
+  const historyTo = $('#patientHistoryTo');
+  const historyClear = $('#clearPatientHistoryFilters');
+  const historyStatus = $('#patientHistoryFilterStatus');
+  const historyEmpty = $('#patientHistoryFilterEmpty');
+
+  if (historyItems.length && historySearch && historyFrom && historyTo) {
+    const applyHistoryFilters = () => {
+      const query = historySearch.value.trim().toLowerCase();
+      const type = historyType?.value || 'all';
+      const from = historyFrom.value;
+      const to = historyTo.value;
+      let visible = 0;
+
+      historyItems.forEach((item) => {
+        const typeText = type === 'all' ? item.dataset.search : item.dataset[type] || '';
+        const matchesType = type === 'all' || Boolean(String(typeText).trim() && !/not documented in available records/i.test(typeText));
+        const matchesText = !query || String(typeText).toLowerCase().includes(query);
+        const date = item.dataset.date || '';
+        const matchesFrom = !from || (date && date >= from);
+        const matchesTo = !to || (date && date <= to);
+        const matches = matchesText && matchesType && matchesFrom && matchesTo;
+        item.hidden = !matches;
+        if (matches) visible += 1;
+      });
+
+      if (historyStatus) historyStatus.textContent = `${visible} visit${visible === 1 ? '' : 's'}`;
+      if (historyEmpty) historyEmpty.hidden = visible !== 0;
+    };
+
+    [historySearch, historyType, historyFrom, historyTo].filter(Boolean).forEach((control) => control.addEventListener('input', applyHistoryFilters));
+    historyClear?.addEventListener('click', () => {
+      historySearch.value = '';
+      if (historyType) historyType.value = 'all';
+      historyFrom.value = '';
+      historyTo.value = '';
+      applyHistoryFilters();
     });
   }
 
@@ -1536,7 +1721,7 @@
     const appendLoadingIndicator = () => {
       const el = document.createElement('div');
       el.className = 'message assistant is-loading';
-      el.innerHTML = '<p>Synthesizing verified medical records…</p>';
+      el.innerHTML = '<p>Searching verified source records…</p>';
       messageList.appendChild(el);
       messageList.scrollTop = messageList.scrollHeight;
       return el;
@@ -1653,6 +1838,70 @@
         console.error('Clipboard copy failed:', err);
       }
     });
+  }
+
+  // Instant patient retrieval: search results stay access-scoped on the
+  // server and show the clinician's longitudinal snapshot before navigation.
+  const patientsInstantSearchInput = $('#patientsInstantSearchInput');
+  const patientsInstantResults = $('#patientsInstantResults');
+  const patientsInstantResultsGrid = $('#patientsInstantResultsGrid');
+  const patientsInstantResultsStatus = $('#patientsInstantResultsStatus');
+  let patientInstantSearchTimer = null;
+  if (patientsInstantSearchInput && patientsInstantResults && patientsInstantResultsGrid) {
+    const renderInstantPatientResults = (results) => {
+      patientsInstantResultsGrid.innerHTML = results.map((item) => {
+        const patient = item.patient || {};
+        const medicines = item.medicationHistory?.currentlyDocumented || [];
+        const diagnoses = item.diagnosisHistory || [];
+        return `
+          <article class="patients-instant-result-card">
+            <div class="patients-instant-result-topline">
+              <div><strong>${escapeHtml(patient.fullName || 'Unknown patient')}</strong><span>${escapeHtml(patient.mrn || 'MRN not documented')}</span></div>
+              <a href="${escapeHtml(item.profileUrl || '#')}" class="btn btn-primary btn-sm">Open profile →</a>
+            </div>
+            <p class="patients-instant-summary">${escapeHtml(item.summary || 'Not documented in available records.')}</p>
+            <div class="patients-instant-stats">
+              <span><b>${Number(item.totalVisits || 0)}</b> visits</span>
+              <span><b>${escapeHtml(item.lastVisit || 'Not documented')}</b> last visit</span>
+              <span><b>${medicines.length}</b> documented medicines</span>
+            </div>
+            <div class="patients-instant-history-grid">
+              <div><small>Medication history</small><p>${escapeHtml(medicines.slice(0, 3).join(' · ') || 'Not documented in available records.')}</p></div>
+              <div><small>Diagnosis history</small><p>${escapeHtml(diagnoses.slice(0, 3).join(' · ') || 'Not documented in available records.')}</p></div>
+              <div><small>Investigation history</small><p>${escapeHtml((item.investigationHistory?.previousInvestigations || []).slice(0, 3).join(' · ') || 'Not documented in available records.')}</p></div>
+            </div>
+            <div class="patients-instant-footer"><span>${item.timeline?.length || 0} timeline entries</span><a href="${escapeHtml(item.profileUrl || '#')}#tab-records">View complete timeline →</a></div>
+          </article>
+        `;
+      }).join('');
+      patientsInstantResults.hidden = results.length === 0;
+      if (patientsInstantResultsStatus) patientsInstantResultsStatus.textContent = `${results.length} authorized profile${results.length === 1 ? '' : 's'}`;
+    };
+
+    const fetchInstantPatientResults = async () => {
+      const query = patientsInstantSearchInput.value.trim();
+      if (query.length < 2) {
+        patientsInstantResults.hidden = true;
+        patientsInstantResultsGrid.replaceChildren();
+        return;
+      }
+      if (patientsInstantResultsStatus) patientsInstantResultsStatus.textContent = 'Searching authorized records…';
+      try {
+        const response = await fetch(`/api/patients/search?q=${encodeURIComponent(query)}`, { headers: { Accept: 'application/json' } });
+        if (!response.ok) throw new Error('Patient search failed');
+        const data = await response.json();
+        renderInstantPatientResults(Array.isArray(data.results) ? data.results : []);
+      } catch (error) {
+        patientsInstantResults.hidden = true;
+        console.error('Instant patient retrieval failed:', error);
+      }
+    };
+
+    patientsInstantSearchInput.addEventListener('input', () => {
+      clearTimeout(patientInstantSearchTimer);
+      patientInstantSearchTimer = setTimeout(fetchInstantPatientResults, 220);
+    });
+    if (patientsInstantSearchInput.value.trim().length >= 2) fetchInstantPatientResults();
   }
 
   function escapeHtml(str) {

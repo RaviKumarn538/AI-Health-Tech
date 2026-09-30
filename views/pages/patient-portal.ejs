@@ -1,0 +1,57 @@
+<% layout('/layouts/boilerplate') -%>
+
+<div class="upload-page-container patient-portal-page">
+  <header class="page-title-block patient-portal-header">
+    <div class="title-breadcrumbs"><span class="current">Patient portal</span></div>
+    <div class="portal-heading-row">
+      <div>
+        <span class="exception-review-kicker">PRIVATE RECORDS</span>
+        <h1 class="page-heading">Hello, <%= patient.fullName %></h1>
+        <p class="page-lead">Upload a clinical document to your own record and follow its processing status.</p>
+      </div>
+      <div class="portal-patient-badge"><strong><%= patient.mrn %></strong><span><%= patient.age || '—' %> yrs · <%= patient.gender || 'Not specified' %></span></div>
+    </div>
+  </header>
+
+  <section class="upload-workspace-card patient-upload-card" aria-labelledby="patientUploadTitle">
+    <div class="staff-section-heading"><div><span class="exception-review-kicker">YOUR RECORD</span><h2 id="patientUploadTitle">Upload a prescription or report</h2></div><span class="staff-processing-chip">Private upload</span></div>
+    <form action="/patient/documents" method="post" enctype="multipart/form-data" class="patient-upload-form">
+      <div class="staff-form-grid">
+        <div class="auth-field"><label class="auth-label" for="patientDocumentType">Document type</label><select class="form-select" id="patientDocumentType" name="documentType"><option value="PRESCRIPTION">Prescription</option><option value="LAB_REPORT">Lab report</option><option value="OPD_CARD">OPD card</option><option value="OTHER">Other</option></select></div>
+        <label class="staff-file-picker" for="patientFileInput"><span class="staff-file-picker-icon">↑</span><strong>Choose your file</strong><span>PDF, PNG, JPG, WEBP · up to 15 MB</span><input id="patientFileInput" name="file" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/png,image/jpeg,image/webp" required></label>
+      </div>
+      <div class="upload-submit-row"><span class="staff-upload-note">Your upload is linked only to MRN <strong><%= patient.mrn %></strong>.</span><button type="submit" class="btn btn-primary">Upload securely →</button></div>
+    </form>
+  </section>
+
+  <section class="staff-status-panel" aria-labelledby="patientDocumentsTitle">
+    <div class="staff-section-heading"><div><span class="exception-review-kicker">DOCUMENT HISTORY</span><h2 id="patientDocumentsTitle">Your recent uploads</h2></div><span class="text-muted"><%= (documents || []).length %> records</span></div>
+    <% if (!(documents || []).length) { %><div class="staff-empty-state">No documents have been uploaded to this profile yet.</div><% } else { %>
+      <div class="staff-status-list">
+        <% documents.forEach((document) => { %>
+          <article class="staff-status-row portal-document-row" data-patient-document-id="<%= document._id %>" data-status-url="/patient/documents/<%= document._id %>/status">
+            <div class="staff-status-main"><strong><%= document.originalFilename %></strong><span><%= prettyType(document.documentType) %> · <%= formatDate(document.createdAt, true) %></span></div>
+            <div class="staff-status-meta"><span class="staff-status-pill" data-processing-status><%= document.processingStatus || document.status %></span><span data-processing-detail><%= document.processingError || (document.verifiedAt ? `Verified ${formatDate(document.verifiedAt, true)}` : 'Processing') %></span></div>
+          </article>
+        <% }) %>
+      </div>
+    <% } %>
+  </section>
+</div>
+
+  <script nonce="<%= cspNonce %>">
+  document.querySelectorAll('[data-patient-document-id]').forEach((row) => {
+    const status = row.querySelector('[data-processing-status]');
+    const detail = row.querySelector('[data-processing-detail]');
+    const refresh = async () => {
+      try {
+        const response = await fetch(row.dataset.statusUrl, { headers: { Accept: 'application/json' } });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (status && (data.processingStatus || data.status)) status.textContent = data.processingStatus || data.status;
+        if (detail && data.processingError) detail.textContent = data.processingError;
+      } catch (_) { /* keep the last known status visible */ }
+    };
+    if (row.dataset.statusUrl) setInterval(refresh, 5000);
+  });
+</script>

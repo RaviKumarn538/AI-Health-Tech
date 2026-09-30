@@ -1,0 +1,59 @@
+<% layout('/layouts/boilerplate') -%>
+
+<section class="clinical-auth-section portal-auth-section" aria-labelledby="patientPortalTitle">
+  <div class="auth-card-container">
+    <div class="auth-card-header">
+      <div class="auth-brand-pill">D</div>
+      <h1 class="auth-title" id="patientPortalTitle"><%= mode === 'signup' ? 'Create patient portal access' : 'Patient portal sign in' %></h1>
+      <p class="auth-subtitle">Secure access to your own uploaded clinical documents and processing status.</p>
+    </div>
+
+    <% if (error) { %>
+      <div class="clinical-flash flash-danger" role="alert">
+        <span class="flash-icon">⚠</span>
+        <span class="flash-text"><%= error %></span>
+      </div>
+    <% } %>
+
+    <% if (mode === 'signup') { %>
+      <form action="/patient/signup" method="post" class="auth-credentials-form">
+        <div class="auth-field">
+          <label class="auth-label" for="patientSignupEmail">Registered email</label>
+          <input class="auth-input" id="patientSignupEmail" name="email" type="email" required autocomplete="email">
+        </div>
+        <div class="auth-field">
+          <label class="auth-label" for="patientSignupMrn">Patient ID / MRN</label>
+          <input class="auth-input" id="patientSignupMrn" name="mrn" type="text" required autocomplete="off">
+        </div>
+        <div class="auth-field">
+          <label class="auth-label" for="patientSignupIdentity">Date of birth or phone last 4 digits</label>
+          <input class="auth-input" id="patientSignupIdentity" name="identityCheck" type="text" required autocomplete="off" placeholder="YYYY-MM-DD or 1234">
+        </div>
+        <div class="auth-field">
+          <label class="auth-label" for="patientSignupPassword">Create password</label>
+          <input class="auth-input" id="patientSignupPassword" name="password" type="password" minlength="12" required autocomplete="new-password">
+        </div>
+        <button type="submit" class="btn-auth-submit"><span>Create portal account</span><span class="btn-arrow">→</span></button>
+      </form>
+      <p class="portal-auth-switch">Already registered? <a href="/patient/login">Sign in</a></p>
+    <% } else { %>
+      <form action="/patient/login" method="post" class="auth-credentials-form">
+        <div class="auth-field">
+          <label class="auth-label" for="patientLoginEmail">Email</label>
+          <input class="auth-input" id="patientLoginEmail" name="email" type="email" required autocomplete="email">
+        </div>
+        <div class="auth-field">
+          <label class="auth-label" for="patientLoginPassword">Password</label>
+          <input class="auth-input" id="patientLoginPassword" name="password" type="password" required autocomplete="current-password">
+        </div>
+        <button type="submit" class="btn-auth-submit"><span>Open patient portal</span><span class="btn-arrow">→</span></button>
+      </form>
+      <p class="portal-auth-switch">First time here? <a href="/patient/signup">Create portal access</a></p>
+    <% } %>
+
+    <div class="auth-security-footnote">
+      <div class="security-badges-row"><span>🔒 Private records</span><span>·</span><span>Own-profile access only</span></div>
+      <p class="security-disclaimer">Clinical review and approval remain with the authorized care team.</p>
+    </div>
+  </div>
+</section>

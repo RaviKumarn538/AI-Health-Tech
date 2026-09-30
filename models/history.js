@@ -104,9 +104,29 @@ const messageSchema = new Schema(
 
 messageSchema.index({ conversation: 1, createdAt: 1 });
 
+const clinicalHandoffSchema = new Schema(
+  {
+    patient: { type: Schema.Types.ObjectId, ref: "Patient", required: true, index: true },
+    createdBy: { type: Schema.Types.ObjectId, ref: "User", default: null, index: true },
+    createdByName: { type: String, trim: true },
+    clinicName: { type: String, default: "CuraClinic AI", index: true },
+    status: { type: String, enum: ["DRAFT", "APPROVED", "SHARED"], default: "DRAFT", index: true },
+    summary: { type: String, default: "" },
+    sourceDocuments: [{ type: Schema.Types.ObjectId, ref: "ClinicalDocument" }],
+    sourceRecords: [{ type: Schema.Types.ObjectId, ref: "MedicalRecord" }],
+    approvedAt: Date,
+    approvedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    sharedAt: Date,
+  },
+  { collection: "clinical_handoffs", timestamps: true }
+);
+
+clinicalHandoffSchema.index({ patient: 1, createdAt: -1 });
+
 module.exports = {
   MedicalRecord: mongoose.models.MedicalRecord || mongoose.model("MedicalRecord", medicalRecordSchema),
   VerificationDraft: mongoose.models.VerificationDraft || mongoose.model("VerificationDraft", verificationDraftSchema),
   Conversation: mongoose.models.Conversation || mongoose.model("Conversation", conversationSchema),
   Message: mongoose.models.Message || mongoose.model("Message", messageSchema),
+  ClinicalHandoff: mongoose.models.ClinicalHandoff || mongoose.model("ClinicalHandoff", clinicalHandoffSchema),
 };

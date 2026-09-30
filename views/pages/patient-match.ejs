@@ -7,8 +7,8 @@
       <span class="sep">/</span>
       <span class="current">Patient match</span>
     </div>
-    <h1 class="page-heading">Confirm the patient before review</h1>
-    <p class="page-lead">The document is stored privately, but it is not attached to any chart yet. Confirm an authorized patient using the extracted identifiers below.</p>
+    <h1 class="page-heading">Confirm the suggested patient before review</h1>
+    <p class="page-lead">The document is stored privately and will not be attached to a chart until you explicitly confirm an authorized patient.</p>
   </header>
 
   <div class="upload-workspace-card">
@@ -28,8 +28,40 @@
       </div>
     </div>
 
+    <% if (candidates && candidates.length) { const suggestedPatient = candidates[0]; %>
+      <section class="panel-section-card patient-match-recommendation" aria-labelledby="patientMatchRecommendationTitle">
+        <div class="patient-match-recommendation-header">
+          <div>
+            <span class="patient-match-kicker">Patient Match</span>
+            <h2 class="card-heading" id="patientMatchRecommendationTitle">Possible existing patient found</h2>
+            <p class="card-sub">Review the identity signals, then confirm manually. A suggestion never attaches the prescription automatically.</p>
+          </div>
+          <span class="match-confidence-badge match-confidence-<%= String(suggestedPatient.matchConfidence || 'medium').toLowerCase() %>">Match confidence: <strong><%= suggestedPatient.matchConfidence || 'MEDIUM' %></strong></span>
+        </div>
+
+        <div class="patient-match-recommendation-details">
+          <div>
+            <strong><%= suggestedPatient.fullName %></strong>
+            <span>MRN: <%= suggestedPatient.mrn || 'Not recorded' %></span>
+          </div>
+          <div>
+            <span><%= suggestedPatient.age || 'Age not recorded' %> · <%= suggestedPatient.gender || 'Gender not recorded' %></span>
+            <span>Last visit: <%= suggestedPatient.lastVisit ? formatDate(suggestedPatient.lastVisit, true) : 'Not documented' %></span>
+          </div>
+        </div>
+        <div class="patient-match-reasons"><%= suggestedPatient.matchReasons.join(' · ') || 'Identity signal available' %></div>
+
+        <form method="post" action="/documents/<%= document._id %>/match" class="patient-match-recommendation-actions">
+          <input type="hidden" name="patientId" value="<%= suggestedPatient._id %>">
+          <button type="submit" class="btn btn-primary">Confirm this patient <span aria-hidden="true">→</span></button>
+          <a href="#choose-existing-patient" class="btn btn-outline">Choose another patient</a>
+          <a href="#create-new-patient" class="btn btn-outline">Create new patient</a>
+        </form>
+      </section>
+    <% } %>
+
     <!-- Option 1: Create New Patient Profile from Extracted Signals -->
-    <div class="panel-section-card" style="margin-top: 1.5rem; border: 1.5px solid var(--primary); background: var(--surface-soft);">
+    <div class="panel-section-card" id="create-new-patient" style="margin-top: 1.5rem; border: 1.5px solid var(--primary); background: var(--surface-soft);">
       <div class="section-header-row">
         <div>
           <h2 class="card-heading" style="color: var(--navy); display: flex; align-items: center; gap: 0.5rem;">
@@ -76,7 +108,7 @@
     </div>
 
     <!-- Option 2: Match to an Existing Patient -->
-    <form method="post" action="/documents/<%= document._id %>/match" class="upload-form" style="margin-top: 2rem;">
+    <form method="post" action="/documents/<%= document._id %>/match" class="upload-form" id="choose-existing-patient" style="margin-top: 2rem;">
       <div class="section-header-row">
         <div>
           <h2 class="card-heading">Or Match to Existing Patient Chart</h2>
@@ -92,8 +124,8 @@
       <% } else { %>
         <% if (!candidates.length) { %>
           <div class="empty-state-box">
-            <h3>No automatic candidate found</h3>
-            <p>Search is intentionally conservative. Select the correct patient from the full authorized list below.</p>
+            <h3>No safe match suggested</h3>
+            <p>Name alone is never enough to attach a prescription. Select the correct authorized patient below or create a new chart.</p>
           </div>
         <% } else { %>
           <div class="patient-match-list">
@@ -102,7 +134,8 @@
                 <input type="radio" name="candidatePatient" value="<%= candidate._id %>" onchange="document.getElementById('selectedPatientId').value = this.value" <%= index === 0 ? 'checked' : '' %>>
                 <span>
                   <strong><%= candidate.fullName %></strong>
-                  <small><%= candidate.mrn %> · <%= candidate.age || 'Age not recorded' %> · <%= candidate.gender || 'Gender not recorded' %></small>
+                  <small>MRN: <%= candidate.mrn || 'Not recorded' %> · <%= candidate.age || 'Age not recorded' %> · <%= candidate.gender || 'Gender not recorded' %></small>
+                  <small>Last visit: <%= candidate.lastVisit ? formatDate(candidate.lastVisit, true) : 'Not documented' %></small>
                   <small><%= candidate.matchReasons.join(' · ') || 'Authorized patient' %></small>
                 </span>
                 <b><%= candidate.matchScore %> signal</b>

@@ -18,28 +18,36 @@ const { OAuth2Client } = require("google-auth-library");
 
 const { Patient, ClinicalDocument, ClinicalExtraction, SOAPNote, AuditLog } = require("./models/clinical");
 const User = require("./models/user");
-const { MedicalRecord, VerificationDraft, Conversation, Message } = require("./models/history");
+const { MedicalRecord, VerificationDraft, Conversation, Message, ClinicalHandoff } = require("./models/history");
 const { analyzeDocumentPayload, evaluateLab, screenInteractions, semanticConfidence } = require("./utils/clinicalAnalyzer");
-const { answerClinicalQuestion, extractDocument, generateSoap } = require("./utils/aiClinical");
+const { answerClinicalQuestion, extractDocument, generateSoap, generatePatientHistorySummary } = require("./utils/aiClinical");
+const { buildPatientHistoryIntelligence } = require("./utils/patientHistory");
+const { indexClinicalRecord, retrieveClinicalContext } = require("./utils/clinicalRag");
 const { uploadClinicalDocument, destroyClinicalDocument, generateSignedDeliveryUrl } = require("./utils/cloudinaryStorage");
 const { clinicalSearchEngine } = require("./utils/dsaSearchEngine");
 const { getPipelineMetrics, cachedAnalyzeDocumentPayload } = require("./utils/dsaExtraction");
 
 process.on("uncaughtException", (err) => {
   console.error("UNCAUGHT EXCEPTION:", err);
+  // Do not keep serving requests after a fatal invariant failure. A process
+  // supervisor can restart the app with a known-good configuration.
+  process.exit(1);
 });
 process.on("unhandledRejection", (reason, promise) => {
   console.error("UNHANDLED REJECTION:", reason);
+  process.exit(1);
 });
 
 const app = express();
 const isProduction = process.env.NODE_ENV === "production";
 const PORT = Number(process.env.PORT || 8080);
 const MONGO_URL = process.env.MONGO_URL || "mongodb://127.0.0.1:27017/curaclinic_documentation";
-const SESSION_SECRET = process.env.SESSION_SECRET || "curaclinic-development-session-secret";
+const SESSION_SECRET = process.env.SESSION_SECRET || (isProduction ? "" : "curaclinic-development-session-secret");
 const CLINIC_NAME = process.env.CLINIC_NAME || "AI Clinical Records";
 const TAGLINE = "Turn handwritten clinical documents into verified digital records.";
 const DEFAULT_CLINICIAN = process.env.CLINICIAN_NAME || "Clinical Team";
+const MIN_PASSWORD_LENGTH = 12;
+const clinicianSignupEnabled = String(process.env.ALLOW_CLINICIAN_SIGNUP || (isProduction ? "false" : "true")).toLowerCase() === "true";
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
 const normalizeOrigin = (value) => String(value || "").trim().replace(/\/+$/, "");
@@ -57,6 +65,18 @@ const googleConfigured = Boolean(
   && !hasCredentialPlaceholder(GOOGLE_CLIENT_ID)
   && !hasCredentialPlaceholder(GOOGLE_CLIENT_SECRET)
 );
+
+if (isProduction && SESSION_SECRET.length < 32) {
+  throw new Error("SESSION_SECRET must be configured with at least 32 characters in production.");
+}
+
+if (isProduction && !process.env.MONGO_URL) {
+  throw new Error("MONGO_URL must be configured in production.");
+}
+
+if (isProduction && !sessionCookieSecure) {
+  throw new Error("APP_ORIGIN must use HTTPS in production so session cookies remain secure.");
+}
 // The landing page is public, but every clinical workspace and API route is
 // protected. There is intentionally no local/demo authentication bypass.
 const authenticationRequired = true;
@@ -83,7 +103,7 @@ const ASSET_VERSION = getAssetVersion();
 function getGoogleRedirectUri(req = null) {
   if (process.env.GOOGLE_REDIRECT_URI) return String(process.env.GOOGLE_REDIRECT_URI).trim();
   if (req && !isProduction) {
-    const proto = req.headers["x-forwarded-proto"] || req.protocol || (isProduction ? "https" : "http");
+    const proto = req.protocol || "http";
     const host = req.get("host");
     if (host) {
       return `${proto}://${host}/auth/google/callback`;
@@ -99,7 +119,18 @@ function getOAuthClient(req = null) {
 
 function safeNextPath(value) {
   const candidate = String(value || "").trim();
-  if (!candidate || !candidate.startsWith("/") || candidate.startsWith("//") || candidate.includes("\\")) return "/dashboard";
+  if (
+    !candidate ||
+    !candidate.startsWith("/") ||
+    candidate.startsWith("//") ||
+    candidate.includes("\\") ||
+    candidate.startsWith("/logout") ||
+    candidate.startsWith("/login") ||
+    candidate.startsWith("/signup") ||
+    candidate.startsWith("/auth/")
+  ) {
+    return "/dashboard";
+  }
   return candidate;
 }
 
@@ -126,8 +157,10 @@ async function buildGoogleAuthUrl(req, nextPath = "/dashboard") {
   if (!googleOAuthClient) return "";
 
   const state = crypto.randomBytes(24).toString("hex");
+  const nonce = crypto.randomBytes(24).toString("hex");
   req.session.googleOAuthState = {
     value: state,
+    nonce,
     createdAt: Date.now(),
     nextUrl: safeNextPath(nextPath),
   };
@@ -138,6 +171,7 @@ async function buildGoogleAuthUrl(req, nextPath = "/dashboard") {
     scope: ["openid", "email", "profile"],
     prompt: "select_account",
     state,
+    nonce,
   });
 }
 const STORAGE_DIR = path.join(__dirname, "storage", "documents");
@@ -233,11 +267,45 @@ function resolvePrivateDocumentPath(document) {
 app.engine("ejs", ejsMate);
 app.set("views", path.join(__dirname, "views"));
 app.set("view engine", "ejs");
-app.set("trust proxy", 1);
+// Trust the first proxy only in production, where the deployment topology is
+// known. In local development, trusting forwarded headers would let a client
+// spoof its IP and protocol.
+app.set("trust proxy", isProduction ? 1 : false);
 app.use(compression());
 app.use(express.urlencoded({ extended: true, limit: "2mb" }));
 app.use(express.json({ limit: "2mb" }));
-app.use(methodOverride("_method"));
+// Only accept method overrides from the parsed request body. Query-string
+// overrides can turn an otherwise harmless cross-site request into a mutation.
+app.use(methodOverride((req) => req.body?._method || null));
+
+app.use((req, res, next) => {
+  const cspNonce = crypto.randomBytes(18).toString("base64");
+  res.locals.cspNonce = cspNonce;
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  res.setHeader("X-XSS-Protection", "0");
+  res.setHeader("X-Download-Options", "noopen");
+  res.setHeader("Content-Security-Policy", [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "object-src 'none'",
+    "frame-ancestors 'none'",
+    "form-action 'self'",
+    `script-src 'self' 'nonce-${cspNonce}'`,
+    "script-src-attr 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "img-src 'self' data: https:",
+    "media-src 'self' https: blob:",
+    "font-src 'self' data: https://fonts.gstatic.com",
+    "connect-src 'self' https://generativelanguage.googleapis.com https://openrouter.ai",
+  ].join("; "));
+  if (isProduction && sessionCookieSecure) {
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
+  next();
+});
 // Clinical source files are private. A legacy /uploads URL must never expose
 // anything even though the public folder is served for UI assets.
 app.use("/uploads", (_req, res) => res.sendStatus(404));
@@ -263,14 +331,93 @@ app.use(
   })
 );
 
+function createRateLimiter({ windowMs, max, message }) {
+  const buckets = new Map();
+  const cleanup = setInterval(() => {
+    const now = Date.now();
+    for (const [key, bucket] of buckets) {
+      if (bucket.resetAt <= now) buckets.delete(key);
+    }
+  }, Math.min(windowMs, 60_000));
+  cleanup.unref?.();
+
+  return (req, res, next) => {
+    const now = Date.now();
+    const key = `${req.ip}:${req.path}`;
+    const bucket = buckets.get(key);
+    if (!bucket || bucket.resetAt <= now) {
+      buckets.set(key, { count: 1, resetAt: now + windowMs });
+      return next();
+    }
+    bucket.count += 1;
+    if (bucket.count > max) {
+      res.setHeader("Retry-After", Math.ceil((bucket.resetAt - now) / 1000));
+      if (req.path.startsWith("/api/")) return res.status(429).json({ error: message });
+      return res.status(429).send(message);
+    }
+    next();
+  };
+}
+
+const authRateLimit = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 12,
+  message: "Too many sign-in attempts. Please try again later.",
+});
+const uploadRateLimit = createRateLimiter({
+  windowMs: 10 * 60 * 1000,
+  max: 30,
+  message: "Too many document uploads. Please try again later.",
+});
+const assistantRateLimit = createRateLimiter({
+  windowMs: 5 * 60 * 1000,
+  max: 40,
+  message: "Too many AI requests. Please wait before trying again.",
+});
+const searchRateLimit = createRateLimiter({
+  windowMs: 60 * 1000,
+  max: 120,
+  message: "Too many search requests. Please wait a moment and try again.",
+});
+
+// SameSite cookies provide a browser-level CSRF barrier, while this origin
+// check protects state-changing requests when a browser still sends a session
+// cookie. Requests without browser origin headers remain usable for trusted
+// server-to-server integrations.
+function sameOriginGuard(req, res, next) {
+  if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return next();
+  const expectedOrigin = normalizeOrigin(`${req.protocol}://${req.get("host")}`);
+  const origin = normalizeOrigin(req.get("origin"));
+  const referer = req.get("referer");
+  if (origin && origin !== expectedOrigin) return res.status(403).send("Cross-site request blocked.");
+  if (!origin && referer) {
+    try {
+      if (normalizeOrigin(new URL(referer).origin) !== expectedOrigin) return res.status(403).send("Cross-site request blocked.");
+    } catch (_error) {
+      return res.status(403).send("Cross-site request blocked.");
+    }
+  }
+  next();
+}
+
+app.use(sameOriginGuard);
+
 app.locals.clinicName = CLINIC_NAME;
 app.locals.tagline = TAGLINE;
 app.locals.clinicianName = DEFAULT_CLINICIAN;
 app.locals.assetVersion = ASSET_VERSION;
+app.locals.currentPath = "";
 app.locals.activeClinics = [CLINIC_NAME, "Sunrise Hospital", "Private Practice"];
 app.locals.clinicDisplayName = (clinic) => clinic || CLINIC_NAME;
 app.locals.semanticConfidence = semanticConfidence;
 app.locals.googleConfigured = googleConfigured;
+app.locals.clinicianSignupEnabled = clinicianSignupEnabled;
+app.locals.safeJsonForScript = (value) => JSON.stringify(value)
+  .replace(/</g, "\\u003c")
+  .replace(/>/g, "\\u003e")
+  .replace(/&/g, "\\u0026")
+  .replace(/\u2028/g, "\\u2028")
+  .replace(/\u2029/g, "\\u2029");
 app.locals.formatDate = (value, includeTime = false) => {
   if (!value) return "Not recorded";
   const date = new Date(value);
@@ -296,7 +443,7 @@ app.locals.isDocumentPendingReview = (document) => Boolean(document && ["DRAFT",
 
 app.use(async (req, res, next) => {
   res.locals.currentPath = req.path;
-  res.locals.loginMode = req.query.mode === "signup";
+  res.locals.loginMode = req.query.mode === "signup" && clinicianSignupEnabled;
   res.locals.flash = req.session.flash || null;
   delete req.session.flash;
   req.session.currentClinic = req.session.currentClinic || CLINIC_NAME;
@@ -311,18 +458,29 @@ app.use(async (req, res, next) => {
   }
   const isAuth = Boolean(req.session.userId && currentUser);
   req.currentUser = currentUser;
+  // Only administrators may change clinic context. All other roles are
+  // permanently scoped to the clinic assigned to their account.
+  if (currentUser && currentUser.role !== "ADMIN") {
+    req.session.currentClinic = currentUser.clinic || CLINIC_NAME;
+  }
+  res.locals.currentClinic = req.session.currentClinic;
   res.locals.isAuthenticated = isAuth;
   res.locals.currentUser = currentUser;
   next();
 });
 
 app.use((req, res, next) => {
-  const publicPaths = new Set(["/", "/login", "/auth/google", "/auth/google/callback", "/health"]);
+  const publicPaths = new Set(["/", "/login", "/signup", "/patient/login", "/patient/signup", "/logout", "/auth/google", "/auth/google/callback", "/health"]);
   if (authenticationRequired && !req.currentUser && !publicPaths.has(req.path)) {
     if (req.path.startsWith("/api/")) return res.status(401).json({ error: "Sign in as an authorized clinician to continue." });
-    const authEntryPath = googleConfigured ? "/auth/google" : "/login";
-    return res.redirect(authEntryPath + "?next=" + encodeURIComponent(req.originalUrl));
+    return res.redirect("/login?next=" + encodeURIComponent(req.originalUrl));
   }
+  if (req.currentUser?.role === "PATIENT") {
+    const patientAllowed = req.path === "/patient" || req.path.startsWith("/patient/") || req.path.startsWith("/patients/") || req.path.startsWith("/documents/") || req.path === "/logout";
+    if (!patientAllowed) return req.path.startsWith("/api/") ? res.status(403).json({ error: "Patient portal access is limited to your own authorized records." }) : res.redirect("/patient");
+  }
+  if (req.currentUser?.role === "STAFF" && req.path === "/dashboard") return res.redirect("/staff");
+  if (req.currentUser?.role === "STAFF" && (req.path === "/review" || req.path.startsWith("/review/") || req.path === "/upload" || req.path.startsWith("/handoffs/"))) return res.redirect("/staff");
   next();
 });
 
@@ -421,8 +579,63 @@ function safeJsonArray(value, fallback = []) {
   return Array.isArray(parsed) ? parsed : (Array.isArray(fallback) ? fallback : []);
 }
 
+function hasUnresolvedReviewExceptions(structuredData, medications = [], labResults = []) {
+  const unresolvedStatuses = new Set(["review_required", "unresolved", "unclear"]);
+  const normalizedConfidence = (value) => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return null;
+    return numeric > 1 ? numeric / 100 : numeric;
+  };
+  const hasValue = (value) => {
+    if (value === null || value === undefined) return false;
+    if (typeof value === "string") return Boolean(value.trim());
+    return true;
+  };
+
+  const walkStructured = (node) => {
+    if (Array.isArray(node)) return node.some(walkStructured);
+    if (!node || typeof node !== "object") return false;
+
+    const status = String(node.status || node.overallStatus || "").toLowerCase();
+    const clinicianResolved = status === "clinician_verified" || status === "clinician_corrected" || node.isVerified === true;
+    if (unresolvedStatuses.has(status)) return true;
+
+    if (Object.prototype.hasOwnProperty.call(node, "value")) {
+      const confidence = normalizedConfidence(node.confidence);
+      if (!clinicianResolved && (!hasValue(node.value) || (confidence !== null && confidence < 0.8))) return true;
+    }
+
+    return Object.entries(node).some(([key, value]) => {
+      if (["source", "sourceRegion", "boundingBox"].includes(key)) return false;
+      return walkStructured(value);
+    });
+  };
+
+  const unresolvedCollectionItem = (item) => {
+    if (!item || typeof item !== "object") return false;
+    const status = String(item.status || item.overallStatus || "").toLowerCase();
+    if (unresolvedStatuses.has(status)) return true;
+    if (item.isVerified === true || status === "clinician_verified" || status === "clinician_corrected") return false;
+    const confidence = normalizedConfidence(item.confidence);
+    return confidence !== null && confidence < 0.8;
+  };
+
+  return walkStructured(structuredData) || medications.some(unresolvedCollectionItem) || labResults.some(unresolvedCollectionItem);
+}
+
 function escapeRegExp(value) {
   return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function normalizeClinicalSearchQuery(value) {
+  return String(value || "")
+    .replace(/\bpatients?\b/gi, "patient")
+    .replace(/\bprescriptions?\b/gi, "prescription")
+    .replace(/\bmedicines?\b/gi, "medicine")
+    .replace(/\bdiagnoses?\b/gi, "diagnosis")
+    .replace(/\b(with|having|from|in|for|the)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function localAccessAllowed() {
@@ -433,7 +646,8 @@ function patientAccessQuery(req) {
   const clinic = req.session?.currentClinic || CLINIC_NAME;
   const clinicScope = { clinic };
   if (req.currentUser?._id) {
-    if (req.currentUser.role === "ADMIN") return clinicScope;
+    if (req.currentUser.role === "PATIENT") return { ...clinicScope, portalUser: req.currentUser._id };
+    if (req.currentUser.role === "ADMIN" || req.currentUser.role === "STAFF") return clinicScope;
     return {
       $and: [
         clinicScope,
@@ -441,9 +655,6 @@ function patientAccessQuery(req) {
           $or: [
             { ownerDoctor: req.currentUser._id },
             { authorizedDoctors: req.currentUser._id },
-            { ownerDoctor: null },
-            { ownerDoctor: { $exists: false } },
-            { authorizedDoctors: { $size: 0 } },
           ],
         },
       ],
@@ -457,7 +668,7 @@ function documentAccessQuery(req, patientIds = []) {
   const unassignedScope = {
     patient: null,
     clinic,
-    ...(req.currentUser?.role === "ADMIN" || localAccessAllowed()
+    ...(req.currentUser?.role === "ADMIN" || req.currentUser?.role === "STAFF" || localAccessAllowed()
       ? {}
       : req.currentUser?._id
         ? { uploadedBy: req.currentUser._id }
@@ -490,12 +701,30 @@ async function findAccessibleDocument(req, documentId, options = {}) {
   // Unmatched uploads are visible only to their uploader inside the active
   // clinic until a patient is explicitly selected.
   const clinicMatches = !document.clinic || document.clinic === (req.session?.currentClinic || CLINIC_NAME);
-  const uploaderMatches = !document.uploadedBy || (req.currentUser?._id && String(document.uploadedBy) === String(req.currentUser._id)) || req.currentUser?.role === "ADMIN" || localAccessAllowed();
+  const uploaderMatches = !document.uploadedBy || (req.currentUser?._id && String(document.uploadedBy) === String(req.currentUser._id)) || req.currentUser?.role === "ADMIN" || req.currentUser?.role === "STAFF" || localAccessAllowed();
   return clinicMatches && uploaderMatches ? document : null;
 }
 
 function currentDoctorName(req) {
   return req.currentUser?.name || req.session.doctorName || DEFAULT_CLINICIAN;
+}
+
+function landingPathForUser(user) {
+  if (user?.role === "STAFF") return "/staff";
+  if (user?.role === "PATIENT") return "/patient";
+  return "/dashboard";
+}
+
+function requireRoles(...roles) {
+  return (req, res, next) => {
+    if (!req.currentUser || !roles.includes(req.currentUser.role)) {
+      return res.status(403).render("pages/error", {
+        pageTitle: "Access denied",
+        message: "This workflow is restricted to an authorized DEUS account.",
+      });
+    }
+    next();
+  };
 }
 
 function isDocumentApproved(document) {
@@ -592,6 +821,28 @@ async function loadPatientContext(req, id) {
   return { patient, documents, soapNotes, medicalRecords, conversations, auditLogs };
 }
 
+async function buildPatientRagContext(req, patient, question) {
+  const clinic = req.session.currentClinic || CLINIC_NAME;
+  const documents = await ClinicalDocument.find({
+    patient: patient._id,
+    status: { $in: ["APPROVED", "CLINICIAN_VERIFIED", "AMENDED", "DOCTOR_VERIFIED"] },
+  }).sort({ verifiedAt: -1, createdAt: -1 }).lean();
+  const records = [];
+  for (const document of documents) {
+    const record = await ensureMedicalRecordForDocument(document, req);
+    if (!record || !record.doctorVerified) continue;
+    records.push(record);
+    await indexClinicalRecord({ clinic, patient, document, record });
+  }
+  const retrieval = await retrieveClinicalContext({ clinic, patientId: patient._id, query: question });
+  const documentIds = new Set(retrieval.documentIds || []);
+  return {
+    ...retrieval,
+    documents: documents.filter((document) => documentIds.has(String(document._id))),
+    records,
+  };
+}
+
 function fieldValue(field) {
   return field && typeof field === "object" && Object.prototype.hasOwnProperty.call(field, "value") ? field.value : field;
 }
@@ -605,33 +856,144 @@ async function findPatientMatchCandidates(req, structuredData) {
   const extractedName = String(fieldValue(extractedPatient.name) || "").trim();
   const extractedMrn = String(fieldValue(extractedPatient.mrn) || "").trim();
   const extractedPhone = String(fieldValue(extractedPatient.phone) || "").trim();
-  if (!extractedName && !extractedMrn && !extractedPhone) return [];
+  const extractedDob = String(fieldValue(extractedPatient.dateOfBirth || extractedPatient.dob || extractedPatient.date_of_birth) || "").trim();
+  if (!extractedName && !extractedMrn && !extractedPhone && !extractedDob) return [];
 
   const patients = await Patient.find(patientAccessQuery(req)).sort({ updatedAt: -1 }).limit(250).lean();
   const normalizedName = compactMatchValue(extractedName);
   const normalizedMrn = compactMatchValue(extractedMrn);
   const normalizedPhone = compactMatchValue(extractedPhone);
-  return patients.map((patient) => {
+  const normalizedDob = compactMatchValue(extractedDob);
+  // A name by itself is never enough to suggest a patient match. MRN or
+  // phone, or date of birth must provide an additional identity signal before
+  // a candidate appears. A name-only match is always blocked.
+  if (!normalizedMrn && !normalizedPhone && !normalizedDob) return [];
+  const scoredCandidates = patients.map((patient) => {
     const patientName = compactMatchValue(patient.fullName);
     const patientMrn = compactMatchValue(patient.mrn);
     const patientPhone = compactMatchValue(patient.phone);
+    const patientDob = compactMatchValue(patient.dateOfBirth || patient.dob);
     let score = 0;
     const reasons = [];
-    if (normalizedMrn && patientMrn === normalizedMrn) { score += 100; reasons.push("MRN exact match"); }
-    if (normalizedPhone && patientPhone && patientPhone === normalizedPhone) { score += 80; reasons.push("phone exact match"); }
-    if (normalizedName && patientName === normalizedName) { score += 70; reasons.push("name exact match"); }
-    else if (normalizedName && (patientName.includes(normalizedName) || normalizedName.includes(patientName))) { score += 35; reasons.push("name partial match"); }
-    return { ...patient, matchScore: score, matchReasons: reasons };
-  }).filter((patient) => patient.matchScore > 0).sort((a, b) => b.matchScore - a.matchScore).slice(0, 10);
+    const mrnExact = Boolean(normalizedMrn && patientMrn === normalizedMrn);
+    const phoneExact = Boolean(normalizedPhone && patientPhone && patientPhone === normalizedPhone);
+    const dobExact = Boolean(normalizedDob && patientDob && patientDob === normalizedDob);
+    const nameExact = Boolean(normalizedName && patientName === normalizedName);
+    if (mrnExact) { score += 100; reasons.push("MRN exact match"); }
+    if (phoneExact) { score += 80; reasons.push("phone exact match"); }
+    if (dobExact) { score += 65; reasons.push("date of birth exact match"); }
+    if (nameExact) { score += 50; reasons.push("name exact match"); }
+    else if (normalizedName && (patientName.includes(normalizedName) || normalizedName.includes(patientName))) { score += 15; reasons.push("name partial match"); }
+    else if (normalizedName) reasons.push("name differs; verify before linking");
+    const identitySignal = mrnExact || phoneExact || dobExact;
+    const highConfidence = (mrnExact && (!normalizedName || nameExact)) || (phoneExact && (!normalizedName || nameExact)) || (dobExact && nameExact);
+    const matchConfidence = highConfidence ? "HIGH" : (identitySignal ? "MEDIUM" : "LOW");
+    return { ...patient, matchScore: score, matchConfidence, matchReasons: reasons, identitySignal };
+  }).filter((patient) => patient.identitySignal && patient.matchScore >= 60)
+    .sort((a, b) => b.matchScore - a.matchScore)
+    .slice(0, 10);
+
+  if (!scoredCandidates.length) return [];
+  const candidateIds = scoredCandidates.map((candidate) => candidate._id);
+  const [recentRecords, recentDocuments] = await Promise.all([
+    MedicalRecord.find({ patient: { $in: candidateIds }, doctorVerified: true })
+      .sort({ verifiedAt: -1, createdAt: -1 })
+      .select("patient verifiedAt createdAt")
+      .lean(),
+    ClinicalDocument.find({ patient: { $in: candidateIds }, status: { $in: ["APPROVED", "CLINICIAN_VERIFIED", "AMENDED", "DOCTOR_VERIFIED"] } })
+      .sort({ verifiedAt: -1, createdAt: -1 })
+      .select("patient verifiedAt createdAt")
+      .lean(),
+  ]);
+  const lastVisitByPatient = new Map();
+  [...recentRecords, ...recentDocuments].sort((a, b) => new Date(b.verifiedAt || b.createdAt) - new Date(a.verifiedAt || a.createdAt)).forEach((record) => {
+    const key = String(record.patient);
+    if (!lastVisitByPatient.has(key)) lastVisitByPatient.set(key, record.verifiedAt || record.createdAt);
+  });
+  return scoredCandidates.map((candidate) => ({
+    ...candidate,
+    lastVisit: lastVisitByPatient.get(String(candidate._id)) || null,
+  }));
 }
 
-async function processDocumentUpload(req, patientId, file) {
+function extractionNeedsDoctorReview(extracted, patient) {
+  if (!patient) return true;
+  const medications = (extracted?.medications || []).map(normalizeMedication);
+  const labResults = (extracted?.labResults || []).map(normalizeLab);
+  return hasUnresolvedReviewExceptions(extracted?.structuredData, medications, labResults)
+    || Number(extracted?.clinicalFlags?.totalAlerts || 0) > 0;
+}
+
+async function processDocumentExtraction(req, document, patient, file, documentType) {
+  const extracted = await extractDocument(
+    { filePath: file.path, mimeType: file.mimetype },
+    document.originalFilename,
+    documentType,
+    patient?.allergies || "",
+  );
+  document.documentType = extracted.documentType || documentType;
+  document.status = "NEEDS_VERIFICATION";
+  document.extractedRecord = {
+    rawText: JSON.stringify(extracted.originalSnapshot || extracted),
+    structuredJson: extracted.structuredData,
+    confidenceScore: extracted.overallConfidence || 0,
+    modelName: extracted.modelName,
+    aiSummary: extracted.aiSummary,
+    clinicalFlags: extracted.clinicalFlags,
+    extractedAt: new Date(),
+  };
+  document.medications = (extracted.medications || []).map(normalizeMedication);
+  document.labResults = (extracted.labResults || []).map(normalizeLab);
+  const extraction = await ClinicalExtraction.create({
+    document: document._id,
+    patient: patient?._id || null,
+    aiProvider: extracted.modelName || "manual-clinical-review",
+    overallConfidence: extracted.overallConfidence || 0,
+    status: extracted.status || "NEEDS_VERIFICATION",
+    structuredData: extracted.structuredData,
+    originalSnapshot: extracted.originalSnapshot || {},
+    clinicalFlags: extracted.clinicalFlags || {},
+    aiSummary: extracted.aiSummary || "",
+  });
+  document.extraction = extraction._id;
+  const needsDoctorReview = extractionNeedsDoctorReview(extracted, patient);
+  document.requiresDoctorReview = needsDoctorReview;
+  document.processingStatus = patient
+    ? (needsDoctorReview ? "DOCTOR_REVIEW_REQUIRED" : "VALIDATION_COMPLETE")
+    : "PATIENT_MATCH_REQUIRED";
+  document.autoValidatedAt = patient && !needsDoctorReview ? new Date() : null;
+  document.processingError = "";
+  await document.save();
+  await recordAudit("AI_EXTRACTION", {
+    document: document._id,
+    patient: patient?._id || null,
+    actorName: currentDoctorName(req),
+    data: {
+      model: extracted.modelName,
+      status: document.status,
+      processingStatus: document.processingStatus,
+      ingestionSource: document.ingestionSource,
+      overallConfidence: extracted.overallConfidence || 0,
+      alertsFound: extracted.clinicalFlags?.totalAlerts || 0,
+    },
+  });
+  // DSA perf: incremental index update — O(document) instead of a full rebuild.
+  clinicalSearchEngine.indexSingleDocument({
+    ...document.toObject(),
+    patient: patient ? { fullName: patient.fullName, mrn: patient.mrn } : null,
+  });
+  const patientCandidates = patient ? [] : await findPatientMatchCandidates(req, extracted.structuredData);
+  return { document, patient, extracted, extraction, patientCandidates };
+}
+
+async function processDocumentUpload(req, patientId, file, options = {}) {
   await validateUploadedFile(file);
   const patient = patientId ? await findAccessiblePatient(req, patientId) : null;
   if (patientId && !patient) throw new Error("The selected patient was not found or you are not authorized to access this patient.");
   const requestedType = String(req.body.documentType || "CLINICAL_NOTE");
   const documentType = requestedType === "AUTO" ? "CLINICAL_NOTE" : allowedDocumentTypes.has(requestedType) ? requestedType : "CLINICAL_NOTE";
   const clinic = req.session.currentClinic || CLINIC_NAME;
+  const ingestionSource = ["staff", "patient", "doctor", "integration"].includes(options.source) ? options.source : "doctor";
   let cloudAsset = null;
   try {
     cloudAsset = await uploadClinicalDocument(file, { clinic, doctorId: req.currentUser?._id ? String(req.currentUser._id) : "local-doctor" });
@@ -651,36 +1013,45 @@ async function processDocumentUpload(req, patientId, file) {
       fileType: file.mimetype,
       fileSize: file.size,
       documentType,
-      status: "DRAFT",
+      status: options.background ? "PENDING_OCR" : "DRAFT",
+      ingestionSource,
+      processingStatus: options.background ? "PROCESSING" : "RECEIVED",
+      requiresDoctorReview: true,
     });
-    await recordAudit("DOCUMENT_UPLOAD", { document: document._id, patient: patient?._id || null, actorName: currentDoctorName(req), data: { filename: document.originalFilename, size: document.fileSize, cloudinaryAssetId: cloudAsset?.assetId || null } });
-    const extracted = await extractDocument({ filePath: file.path, mimeType: file.mimetype }, document.originalFilename, documentType, patient?.allergies || "");
-  document.documentType = extracted.documentType || documentType;
-  document.status = "NEEDS_VERIFICATION";
-  document.extractedRecord = { rawText: JSON.stringify(extracted.originalSnapshot || extracted), structuredJson: extracted.structuredData, confidenceScore: extracted.overallConfidence || 0, modelName: extracted.modelName, aiSummary: extracted.aiSummary, clinicalFlags: extracted.clinicalFlags, extractedAt: new Date() };
-  document.medications = (extracted.medications || []).map(normalizeMedication);
-  document.labResults = (extracted.labResults || []).map(normalizeLab);
-  const extraction = await ClinicalExtraction.create({
-    document: document._id,
-    patient: patient?._id || null,
-    aiProvider: extracted.modelName || "manual-clinical-review",
-    overallConfidence: extracted.overallConfidence || 0,
-    status: extracted.status || "NEEDS_VERIFICATION",
-    structuredData: extracted.structuredData,
-    originalSnapshot: extracted.originalSnapshot || {},
-    clinicalFlags: extracted.clinicalFlags || {},
-    aiSummary: extracted.aiSummary || "",
-  });
-  document.extraction = extraction._id;
-  await document.save();
-  await recordAudit("AI_EXTRACTION", { document: document._id, patient: patient?._id || null, actorName: currentDoctorName(req), data: { model: extracted.modelName, status: document.status, overallConfidence: extracted.overallConfidence || 0, alertsFound: extracted.clinicalFlags?.totalAlerts || 0 } });
-  // DSA perf: incremental index update — O(document) instead of a full rebuild.
-  clinicalSearchEngine.indexSingleDocument({
-    ...document.toObject(),
-    patient: patient ? { fullName: patient.fullName, mrn: patient.mrn } : null,
-  });
-  const patientCandidates = patient ? [] : await findPatientMatchCandidates(req, extracted.structuredData);
-    return { document, patient, extracted, extraction, patientCandidates };
+    await recordAudit("DOCUMENT_UPLOAD", {
+      document: document._id,
+      patient: patient?._id || null,
+      actorName: currentDoctorName(req),
+      actorRole: req.currentUser?.role,
+      data: { filename: document.originalFilename, size: document.fileSize, cloudinaryAssetId: cloudAsset?.assetId || null, ingestionSource },
+    });
+
+    if (options.background) {
+      setImmediate(async () => {
+        try {
+          await processDocumentExtraction(req, document, patient, file, documentType);
+        } catch (error) {
+          console.error("Background document processing failed:", error.message);
+          await ClinicalDocument.findByIdAndUpdate(document._id, {
+            $set: {
+              status: "REJECTED",
+              processingStatus: "FAILED",
+              processingError: error.message.slice(0, 500),
+              requiresDoctorReview: true,
+            },
+          }).catch(() => {});
+          await recordAudit("PROCESSING_FAILED", {
+            document: document._id,
+            patient: patient?._id || null,
+            actorName: currentDoctorName(req),
+            data: { ingestionSource, error: error.message.slice(0, 500) },
+          });
+        }
+      });
+      return { document, patient, queued: true, patientCandidates: [] };
+    }
+
+    return await processDocumentExtraction(req, document, patient, file, documentType);
   } catch (error) {
     if (document?._id) {
       await ClinicalExtraction.deleteMany({ document: document._id }).catch(() => {});
@@ -745,57 +1116,243 @@ async function refreshScopedSearchIndex(req) {
   return stats;
 }
 
+async function restrictSearchResultsToAuthorizedScope(req, dsaResponse) {
+  if (!dsaResponse || !Array.isArray(dsaResponse.results)) return dsaResponse;
+  const patientIds = await Patient.find(patientAccessQuery(req)).distinct("_id");
+  const [documentIds, recordIds] = await Promise.all([
+    ClinicalDocument.find(documentAccessQuery(req, patientIds)).distinct("_id"),
+    MedicalRecord.find({ patient: { $in: patientIds }, doctorVerified: true }).distinct("_id"),
+  ]);
+  const allowedPatients = new Set(patientIds.map((id) => String(id)));
+  const allowedDocuments = new Set(documentIds.map((id) => String(id)));
+  const allowedRecords = new Set(recordIds.map((id) => String(id)));
+  const isAllowed = (entityId) => {
+    const id = String(entityId || "");
+    if (id.startsWith("patient_")) return allowedPatients.has(id.slice("patient_".length));
+    if (id.startsWith("doc_")) return allowedDocuments.has(id.slice("doc_".length));
+    if (id.startsWith("rec_")) return allowedRecords.has(id.slice("rec_".length));
+    if (id.startsWith("med_") || id.startsWith("lab_")) {
+      const documentId = id.split("_")[1];
+      return allowedDocuments.has(documentId);
+    }
+    return false;
+  };
+  const results = dsaResponse.results.filter((item) => isAllowed(item.id));
+  const facets = { ALL: results.length, PATIENT: 0, MEDICATION: 0, LAB_TEST: 0, DOCUMENT: 0, RECORD: 0 };
+  results.forEach((item) => {
+    if (facets[item.entityType] !== undefined) facets[item.entityType] += 1;
+  });
+  return { ...dsaResponse, results, total: results.length, facets };
+}
+
 async function seedDemoData() {
   return false;
 }
 
 app.get("/", asyncHandler(async (req, res) => {
   res.setHeader("Cache-Control", "no-store, max-age=0");
-  const googleAuthUrl = await buildGoogleAuthUrl(req, "/dashboard");
   res.render("pages/home", {
     pageTitle: "Clinical intelligence for the human side of care",
     brandName: "DEUS — AI-powered Clinical Intelligence",
-    googleAuthUrl: googleAuthUrl || "/auth/google?next=%2Fdashboard",
+    googleAuthUrl: "/auth/google?next=%2Fdashboard",
   });
 }));
 
 app.get("/health", (_req, res) => {
-  res.json({ status: "healthy", service: CLINIC_NAME, database: mongoose.connection.readyState === 1 ? "connected" : "disconnected" });
+  const databaseReady = mongoose.connection.readyState === 1;
+  res.status(databaseReady ? 200 : 503).json({
+    status: databaseReady ? "healthy" : "unavailable",
+    service: CLINIC_NAME,
+  });
 });
 
 app.get("/login", (req, res) => {
   res.setHeader("Cache-Control", "no-store, max-age=0");
-  const nextUrl = safeNextPath(req.query.next);
-  if (googleConfigured) {
-    return res.redirect("/auth/google?next=" + encodeURIComponent(nextUrl));
+  const nextUrl = req.query.next ? safeNextPath(req.query.next) : landingPathForUser(req.currentUser);
+  const signedOut = req.query.signed_out === "true";
+  const error = req.query.error || null;
+  const mode = req.query.mode === "signup" && clinicianSignupEnabled ? "signup" : "login";
+
+  if (req.currentUser) {
+    return res.redirect(nextUrl);
   }
 
-  const signedOut = req.query.signed_out === "true";
   res.render("pages/login", {
-    pageTitle: "Sign in to DEUS",
+    pageTitle: mode === "signup" ? "Create Clinician Account — DEUS" : "Sign in to DEUS",
     brandName: "DEUS — AI-powered Clinical Intelligence",
-    error: req.query.error || null,
+    error,
     signedOut,
     googleConfigured,
     nextUrl,
+    mode,
   });
 });
 
-// Google is the only supported authentication method.
-app.post("/login", (_req, res) => res.redirect("/login?error=Use+Sign+in+with+Google."));
-app.post("/signup", (_req, res) => res.redirect("/login?error=Use+Sign+in+with+Google."));
+app.get("/signup", (req, res) => {
+  if (!clinicianSignupEnabled) return res.redirect("/login?error=" + encodeURIComponent("Clinician account creation is disabled. Ask an administrator to provision access."));
+  const nextParam = req.query.next ? `&next=${encodeURIComponent(req.query.next)}` : "";
+  res.redirect(`/login?mode=signup${nextParam}`);
+});
 
-app.get("/auth/google", asyncHandler(async (req, res) => {
+app.post("/login", authRateLimit, asyncHandler(async (req, res) => {
+  res.setHeader("Cache-Control", "no-store, max-age=0");
+  const email = String(req.body.email || "").trim().toLowerCase();
+  const password = String(req.body.password || "");
+  const requestedNextUrl = req.body.next || req.query.next || "";
+  const nextUrl = requestedNextUrl ? safeNextPath(requestedNextUrl) : "/dashboard";
+
+  if (!email || !password) {
+    return res.status(400).render("pages/login", {
+      pageTitle: "Sign in to DEUS",
+      brandName: "DEUS — AI-powered Clinical Intelligence",
+      error: "Please enter both clinician email and password.",
+      signedOut: false,
+      googleConfigured,
+      nextUrl,
+      mode: "login",
+    });
+  }
+
+  const clinician = await User.findOne({ email });
+  if (!clinician) {
+    return res.status(401).render("pages/login", {
+      pageTitle: "Sign in to DEUS",
+      brandName: "DEUS — AI-powered Clinical Intelligence",
+      error: "Invalid email or password.",
+      signedOut: false,
+      googleConfigured,
+      nextUrl,
+      mode: "login",
+    });
+  }
+
+  if (!clinician.passwordHash) {
+    return res.status(400).render("pages/login", {
+      pageTitle: "Sign in to DEUS",
+      brandName: "DEUS — AI-powered Clinical Intelligence",
+      error: "Invalid email or password.",
+      signedOut: false,
+      googleConfigured,
+      nextUrl,
+      mode: "login",
+    });
+  }
+
+  if (!clinician.validatePassword(password)) {
+    return res.status(401).render("pages/login", {
+      pageTitle: "Sign in to DEUS",
+      brandName: "DEUS — AI-powered Clinical Intelligence",
+      error: "Invalid email or password.",
+      signedOut: false,
+      googleConfigured,
+      nextUrl,
+      mode: "login",
+    });
+  }
+
+  clinician.lastLoginAt = new Date();
+  await clinician.save();
+
+  await regenerateAuthenticatedSession(req, {
+    userId: clinician._id,
+    doctorName: clinician.name,
+    currentClinic: clinician.clinic || CLINIC_NAME,
+  });
+
+  setFlash(req, "success", `Welcome back, ${clinician.name}.`);
+  await saveSession(req);
+  res.redirect(requestedNextUrl ? nextUrl : landingPathForUser(clinician));
+}));
+
+app.post("/signup", authRateLimit, asyncHandler(async (req, res) => {
+  res.setHeader("Cache-Control", "no-store, max-age=0");
+  if (!clinicianSignupEnabled) {
+    return res.status(403).render("pages/login", {
+      pageTitle: "Sign in to DEUS",
+      brandName: "DEUS — AI-powered Clinical Intelligence",
+      error: "Clinician account creation is disabled. Ask an administrator to provision access.",
+      signedOut: false,
+      googleConfigured,
+      nextUrl: "/dashboard",
+      mode: "login",
+    });
+  }
+  const name = String(req.body.name || "").trim();
+  const email = String(req.body.email || "").trim().toLowerCase();
+  const password = String(req.body.password || "");
+  const clinic = String(req.body.clinic || "").trim();
+  const nextUrl = safeNextPath(req.body.next || req.query.next);
+
+  if (!name || !email || !password) {
+    return res.status(400).render("pages/login", {
+      pageTitle: "Create Clinician Account — DEUS",
+      brandName: "DEUS — AI-powered Clinical Intelligence",
+      error: "Please fill in all required fields (Name, Email, and Password).",
+      signedOut: false,
+      googleConfigured,
+      nextUrl,
+      mode: "signup",
+    });
+  }
+
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    return res.status(400).render("pages/login", {
+      pageTitle: "Create Clinician Account — DEUS",
+      brandName: "DEUS — AI-powered Clinical Intelligence",
+      error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters long.`,
+      signedOut: false,
+      googleConfigured,
+      nextUrl,
+      mode: "signup",
+    });
+  }
+
+  const existing = await User.findOne({ email });
+  if (existing) {
+    return res.status(409).render("pages/login", {
+      pageTitle: "Sign in to DEUS",
+      brandName: "DEUS — AI-powered Clinical Intelligence",
+      error: "An account with this email already exists. Please sign in.",
+      signedOut: false,
+      googleConfigured,
+      nextUrl,
+      mode: "login",
+    });
+  }
+
+  const clinician = new User({
+    name,
+    email,
+    clinic: clinic || CLINIC_NAME,
+    role: "DOCTOR",
+    lastLoginAt: new Date(),
+  });
+  clinician.setPassword(password);
+  await clinician.save();
+
+  await regenerateAuthenticatedSession(req, {
+    userId: clinician._id,
+    doctorName: clinician.name,
+    currentClinic: clinician.clinic || CLINIC_NAME,
+  });
+
+  setFlash(req, "success", `Account created successfully. Welcome to DEUS, ${clinician.name}.`);
+  await saveSession(req);
+  res.redirect(nextUrl);
+}));
+
+app.get("/auth/google", authRateLimit, asyncHandler(async (req, res) => {
   res.setHeader("Cache-Control", "no-store, max-age=0");
   const authUrl = await buildGoogleAuthUrl(req, req.query.next);
   if (!authUrl) {
     return res.status(503).render("pages/login", {
       pageTitle: "Sign in to DEUS",
       brandName: "DEUS — AI-powered Clinical Intelligence",
-      error: "Sign-in is temporarily unavailable. Please contact the administrator.",
+      error: "Google Sign-in is temporarily unavailable. You may sign in with your email and password.",
       signedOut: false,
       googleConfigured: false,
       nextUrl: safeNextPath(req.query.next),
+      mode: "login",
     });
   }
   res.redirect(authUrl);
@@ -806,6 +1363,7 @@ app.get("/auth/google/callback", asyncHandler(async (req, res) => {
   if (!googleOAuthClient) return res.redirect("/login?error=Sign-in+is+temporarily+unavailable.");
   const oauthState = req.session.googleOAuthState;
   const expectedState = typeof oauthState === "string" ? oauthState : oauthState?.value;
+  const expectedNonce = typeof oauthState === "string" ? "" : oauthState?.nonce;
   const stateCreatedAt = typeof oauthState === "string" ? 0 : Number(oauthState?.createdAt || 0);
   if (!req.query.code || !req.query.state || req.query.state !== expectedState || (stateCreatedAt && Date.now() - stateCreatedAt > GOOGLE_STATE_TTL_MS)) {
     delete req.session.googleOAuthState;
@@ -824,6 +1382,7 @@ app.get("/auth/google/callback", asyncHandler(async (req, res) => {
   }
   const profile = ticket.getPayload();
   if (!profile?.sub || !profile.email || profile.email_verified === false) return res.redirect("/login?error=Google+did+not+return+a+verified+clinician+profile.");
+  if (expectedNonce && profile.nonce !== expectedNonce) return res.redirect("/login?error=Google+sign-in+could+not+be+verified.+Please+try+again.");
   let clinician = await User.findOne({ googleId: profile.sub });
   if (!clinician) clinician = await User.findOne({ email: profile.email.toLowerCase() });
   if (clinician) {
@@ -833,6 +1392,9 @@ app.get("/auth/google/callback", asyncHandler(async (req, res) => {
     clinician.lastLoginAt = new Date();
     await clinician.save();
   } else {
+    if (!clinicianSignupEnabled) {
+      return res.redirect("/login?error=" + encodeURIComponent("Your Google account is not provisioned for clinician access. Ask an administrator to create your account."));
+    }
     clinician = await User.create({ googleId: profile.sub, email: profile.email.toLowerCase(), name: profile.name || profile.email, avatar: profile.picture || "", lastLoginAt: new Date() });
   }
   await regenerateAuthenticatedSession(req, {
@@ -845,24 +1407,185 @@ app.get("/auth/google/callback", asyncHandler(async (req, res) => {
   res.redirect(redirectTo);
 }));
 
-app.post("/logout", (req, res) => {
-  req.session.destroy(() => {
+const handleLogout = (req, res) => {
+  res.setHeader("Cache-Control", "no-store, max-age=0");
+  const clearSessionCookie = () => {
     res.clearCookie("curaclinic.sid", { path: "/", httpOnly: true, sameSite: "lax", secure: sessionCookieSecure });
-    res.redirect("/");
+  };
+
+  if (req.session) {
+    req.session.destroy((err) => {
+      if (err) {
+        console.error("Error destroying session on logout:", err.message);
+      }
+      clearSessionCookie();
+      res.redirect("/login?signed_out=true");
+    });
+  } else {
+    clearSessionCookie();
+    res.redirect("/login?signed_out=true");
+  }
+};
+
+app.post("/logout", handleLogout);
+
+function renderPatientAuth(res, { mode = "login", error = null } = {}) {
+  return res.render("pages/patient-auth", {
+    pageTitle: mode === "signup" ? "Create Patient Portal Account" : "Patient Portal Sign in",
+    mode,
+    error,
   });
+}
+
+app.get("/patient/login", (req, res) => {
+  if (req.currentUser) return res.redirect(landingPathForUser(req.currentUser));
+  return renderPatientAuth(res);
 });
+
+app.get("/patient/signup", (req, res) => {
+  if (req.currentUser) return res.redirect(landingPathForUser(req.currentUser));
+  return renderPatientAuth(res, { mode: "signup" });
+});
+
+app.post("/patient/login", authRateLimit, asyncHandler(async (req, res) => {
+  const email = String(req.body.email || "").trim().toLowerCase();
+  const password = String(req.body.password || "");
+  const patientUser = await User.findOne({ email, role: "PATIENT" });
+  if (!patientUser || !patientUser.validatePassword(password)) {
+    return renderPatientAuth(res, { error: "Patient portal credentials could not be verified." });
+  }
+  patientUser.lastLoginAt = new Date();
+  await patientUser.save();
+  await regenerateAuthenticatedSession(req, { userId: patientUser._id, doctorName: patientUser.name, currentClinic: patientUser.clinic || CLINIC_NAME });
+  await recordAudit("LOGIN", { actorId: patientUser._id, actorName: patientUser.name, actorRole: "PATIENT", data: { portal: "patient" } });
+  await saveSession(req);
+  res.redirect("/patient");
+}));
+
+app.post("/patient/signup", authRateLimit, asyncHandler(async (req, res) => {
+  const email = String(req.body.email || "").trim().toLowerCase();
+  const mrn = String(req.body.mrn || "").trim();
+  const identityCheck = String(req.body.identityCheck || "").trim();
+  const password = String(req.body.password || "");
+  if (!email || !mrn || !identityCheck || password.length < MIN_PASSWORD_LENGTH) {
+    return renderPatientAuth(res, { mode: "signup", error: `Enter the registered email, MRN, identity check, and a password of at least ${MIN_PASSWORD_LENGTH} characters.` });
+  }
+
+  const patient = await Patient.findOne({ mrn, email, clinic: req.session.currentClinic || CLINIC_NAME });
+  const normalizedCheck = identityCheck.replace(/\s+/g, "").toLowerCase();
+  const normalizedPhone = String(patient?.phone || "").replace(/\D/g, "");
+  const storedDate = patient?.dateOfBirth ? new Date(patient.dateOfBirth) : null;
+  const dateOfBirthCheck = storedDate && !Number.isNaN(storedDate.getTime())
+    ? storedDate.toISOString().slice(0, 10) === normalizedCheck
+    : false;
+  const phoneCheck = normalizedPhone.length >= 4 && normalizedPhone.slice(-4) === normalizedCheck.replace(/\D/g, "");
+  const patientSignupFailure = "The patient details could not be verified or are already linked. Contact clinic staff for portal access.";
+  if (!patient || (!dateOfBirthCheck && !phoneCheck)) return renderPatientAuth(res, { mode: "signup", error: patientSignupFailure });
+  if (patient.portalUser) return renderPatientAuth(res, { mode: "signup", error: patientSignupFailure });
+  if (await User.exists({ email })) return renderPatientAuth(res, { mode: "signup", error: patientSignupFailure });
+
+  const patientUser = new User({ name: patient.fullName, email, role: "PATIENT", patient: patient._id, clinic: patient.clinic || CLINIC_NAME, lastLoginAt: new Date() });
+  patientUser.setPassword(password);
+  await patientUser.save();
+  patient.portalUser = patientUser._id;
+  await patient.save();
+  await recordAudit("PATIENT_CREATED", { patient: patient._id, actorId: patientUser._id, actorName: patient.fullName, actorRole: "PATIENT", data: { portalAccount: true } });
+  await regenerateAuthenticatedSession(req, { userId: patientUser._id, doctorName: patient.fullName, currentClinic: patient.clinic || CLINIC_NAME });
+  await saveSession(req);
+  res.redirect("/patient");
+}));
+
+app.post("/api/staff", authRateLimit, requireRoles("ADMIN"), asyncHandler(async (req, res) => {
+  const name = String(req.body.name || "").trim();
+  const email = String(req.body.email || "").trim().toLowerCase();
+  const password = String(req.body.password || "");
+  if (!name || !email || password.length < MIN_PASSWORD_LENGTH) return res.status(400).json({ error: `Staff name, email, and a password of at least ${MIN_PASSWORD_LENGTH} characters are required.` });
+  if (await User.exists({ email })) return res.status(409).json({ error: "An account with this email already exists." });
+  const staff = new User({ name, email, role: "STAFF", clinic: req.session.currentClinic || CLINIC_NAME });
+  staff.setPassword(password);
+  await staff.save();
+  await recordAudit("STAFF_ACCOUNT_CREATED", { actorId: req.currentUser._id, actorName: currentDoctorName(req), data: { accountCreated: "STAFF", staffId: staff._id, email } });
+  res.status(201).json({ id: staff._id, name: staff.name, email: staff.email, role: staff.role });
+}));
+
+app.get("/staff", requireRoles("STAFF", "ADMIN"), asyncHandler(async (req, res) => {
+  const clinic = req.session.currentClinic || CLINIC_NAME;
+  const [documents, patients] = await Promise.all([
+    ClinicalDocument.find({ clinic, ingestionSource: "staff" }).sort({ createdAt: -1 }).limit(30).populate("patient", "fullName mrn").lean(),
+    Patient.find(patientAccessQuery(req)).sort({ fullName: 1 }).select("_id fullName mrn age gender").lean(),
+  ]);
+  res.render("pages/staff-dashboard", { pageTitle: "Staff Intake", documents, patients, staffName: currentDoctorName(req) });
+}));
+
+function roleUploadPageMiddleware(fallbackPath) {
+  return (req, res, next) => upload.single("file")(req, res, (error) => {
+    if (error) return redirectWithFlash(req, res, fallbackPath, "danger", error.code === "LIMIT_FILE_SIZE" ? "This record is larger than the 15 MB upload limit." : error.message);
+    next();
+  });
+}
+
+app.post("/staff/documents", requireRoles("STAFF", "ADMIN"), roleUploadPageMiddleware("/staff"), asyncHandler(async (req, res) => {
+  if (!req.file) return redirectWithFlash(req, res, "/staff", "danger", "Choose a prescription before continuing.");
+  try {
+    const patientId = req.body.patientId || "";
+    const { document } = await processDocumentUpload(req, patientId, req.file, { source: "staff", background: true });
+    redirectWithFlash(req, res, `/staff?document=${document._id}`, "success", "Prescription received. DEUS is processing it in the background.");
+  } catch (error) {
+    await fsPromises.unlink(req.file.path).catch(() => {});
+    redirectWithFlash(req, res, "/staff", "danger", error.message);
+  }
+}));
+
+app.get("/staff/documents/:id/status", requireRoles("STAFF", "ADMIN"), asyncHandler(async (req, res) => {
+  const document = await findAccessibleDocument(req, req.params.id, { lean: true });
+  if (!document) return res.status(404).json({ error: "Document not found or access denied." });
+  res.json({ id: document._id, status: document.status, processingStatus: document.processingStatus, requiresDoctorReview: document.requiresDoctorReview, processingError: document.processingError || "", patient: document.patient || null });
+}));
+
+app.get("/patient", requireRoles("PATIENT"), asyncHandler(async (req, res) => {
+  const patient = await Patient.findOne({ _id: req.currentUser.patient, portalUser: req.currentUser._id, clinic: req.session.currentClinic || CLINIC_NAME }).lean();
+  if (!patient) return res.status(404).render("pages/error", { pageTitle: "Patient profile unavailable", message: "Your patient portal is not linked to an authorized profile." });
+  const documents = await ClinicalDocument.find({ patient: patient._id }).sort({ createdAt: -1 }).limit(50).select("originalFilename documentType status processingStatus processingError ingestionSource createdAt verifiedAt").lean();
+  res.render("pages/patient-portal", { pageTitle: "Patient Portal", patient, documents });
+}));
+
+app.post("/patient/documents", requireRoles("PATIENT"), roleUploadPageMiddleware("/patient"), asyncHandler(async (req, res) => {
+  if (!req.file) return redirectWithFlash(req, res, "/patient", "danger", "Choose a prescription before continuing.");
+  try {
+    const patient = await Patient.findOne({ _id: req.currentUser.patient, portalUser: req.currentUser._id, clinic: req.session.currentClinic || CLINIC_NAME });
+    if (!patient) throw new Error("Your patient portal is not linked to an authorized profile.");
+    const { document } = await processDocumentUpload(req, patient._id, req.file, { source: "patient", background: true });
+    redirectWithFlash(req, res, `/patient?document=${document._id}`, "success", "Prescription received. DEUS is processing it in the background.");
+  } catch (error) {
+    await fsPromises.unlink(req.file.path).catch(() => {});
+    redirectWithFlash(req, res, "/patient", "danger", error.message);
+  }
+}));
+
+app.get("/patient/documents/:id/status", requireRoles("PATIENT"), asyncHandler(async (req, res) => {
+  const document = await findAccessibleDocument(req, req.params.id, { lean: true });
+  if (!document || String(document.patient || "") !== String(req.currentUser.patient || "")) return res.status(404).json({ error: "Document not found or access denied." });
+  res.json({ id: document._id, status: document.status, processingStatus: document.processingStatus, processingError: document.processingError || "", requiresDoctorReview: document.requiresDoctorReview });
+}));
 
 app.get("/dashboard", asyncHandler(async (req, res) => {
   const patientIds = await Patient.find(patientAccessQuery(req)).distinct("_id");
   const documentScope = documentAccessQuery(req, patientIds);
 
-  const [rawPatientsCount, todayDocsCount, pendingDocs, recentRecords] = await Promise.all([
+  const [rawPatientsCount, todayDocsCount, pendingDocs, recentRecords, processedDocumentsCount, totalVisitsCount, analyticsRecords] = await Promise.all([
     Patient.countDocuments(patientAccessQuery(req)),
     ClinicalDocument.countDocuments({
       ...documentScope,
       createdAt: { $gte: new Date(new Date().setHours(0, 0, 0, 0)) },
     }),
-    ClinicalDocument.find({ ...documentScope, status: { $in: ["DRAFT", "AI_EXTRACTED", "NEEDS_VERIFICATION", "EXTRACTED", "PENDING_OCR"] } })
+    ClinicalDocument.find({
+      ...documentScope,
+      status: { $in: ["DRAFT", "AI_EXTRACTED", "NEEDS_VERIFICATION", "EXTRACTED", "PENDING_OCR"] },
+      $or: [
+        { requiresDoctorReview: { $ne: false } },
+        { processingStatus: { $in: ["PATIENT_MATCH_REQUIRED", "DOCTOR_REVIEW_REQUIRED", "FAILED"] } },
+      ],
+    })
       .sort({ createdAt: -1 })
       .limit(10)
       .populate("patient", "fullName mrn")
@@ -873,10 +1596,47 @@ app.get("/dashboard", asyncHandler(async (req, res) => {
       .populate("patient", "fullName mrn")
       .populate("document", "originalFilename documentType status createdAt")
       .lean(),
+    ClinicalDocument.countDocuments(documentScope),
+    MedicalRecord.countDocuments({ patient: { $in: patientIds }, doctorVerified: true }),
+    MedicalRecord.find({ patient: { $in: patientIds }, doctorVerified: true })
+      .select("extractedData")
+      .limit(5000)
+      .lean(),
   ]);
+  const automaticallyValidatedCount = await ClinicalDocument.countDocuments({
+    ...documentScope,
+    processingStatus: { $in: ["VALIDATION_COMPLETE", "AUTO_PROCESSED"] },
+  });
 
   // Transform pending verification docs with humanized review field counts
   const pendingQueue = pendingDocs.map((doc) => {
+    if (doc.processingStatus === "PATIENT_MATCH_REQUIRED" || !doc.patient) {
+      return {
+        ...doc,
+        patient: doc.patient ? { ...doc.patient, fullName: app.locals.toTitleCase(doc.patient.fullName) } : null,
+        reviewStatusText: "Patient match required",
+        totalNeedReview: 0,
+        actionPath: `/documents/${doc._id}/match`,
+      };
+    }
+    if (doc.processingStatus === "FAILED") {
+      return {
+        ...doc,
+        patient: doc.patient ? { ...doc.patient, fullName: app.locals.toTitleCase(doc.patient.fullName) } : null,
+        reviewStatusText: "Processing failed",
+        totalNeedReview: 1,
+        actionPath: `/review/${doc._id}`,
+      };
+    }
+    if (doc.requiresDoctorReview === false || doc.processingStatus === "VALIDATION_COMPLETE" || doc.processingStatus === "AUTO_PROCESSED") {
+      return {
+        ...doc,
+        patient: doc.patient ? { ...doc.patient, fullName: app.locals.toTitleCase(doc.patient.fullName) } : null,
+        reviewStatusText: "Automatically processed",
+        totalNeedReview: 0,
+        actionPath: `/review/${doc._id}`,
+      };
+    }
     const medsNeedReview = (doc.medications || []).filter((m) => !m.isVerified || m.confidence < 0.85 || m.confidenceTier === "NEEDS_VERIFICATION").length;
     const labsNeedReview = (doc.labResults || []).filter((l) => !l.isVerified || l.confidence < 0.85 || l.confidenceTier === "NEEDS_VERIFICATION").length;
     const totalNeedReview = medsNeedReview + labsNeedReview;
@@ -889,6 +1649,7 @@ app.get("/dashboard", asyncHandler(async (req, res) => {
       patient: doc.patient ? { ...doc.patient, fullName: app.locals.toTitleCase(doc.patient.fullName) } : null,
       reviewStatusText,
       totalNeedReview,
+      actionPath: `/review/${doc._id}`,
     };
   });
 
@@ -926,7 +1687,24 @@ app.get("/dashboard", asyncHandler(async (req, res) => {
 
   const statPatients = rawPatientsCount;
   const statTodayDocs = todayDocsCount;
-  const statNeedsReview = pendingQueue.length;
+  const statNeedsReview = pendingQueue.filter((item) => item.totalNeedReview > 0 || item.reviewStatusText === "Patient match required" || item.reviewStatusText === "Processing failed").length;
+  const medicineCounts = new Map();
+  const diagnosisCounts = new Map();
+  analyticsRecords.forEach((record) => {
+    const data = record.extractedData || {};
+    (Array.isArray(data.medications) ? data.medications : []).forEach((medication) => {
+      const name = String(fieldValue(medication?.name || medication?.genericName || "") || "").trim();
+      if (name) medicineCounts.set(name, (medicineCounts.get(name) || 0) + 1);
+    });
+    const diagnoses = Array.isArray(data.diagnosis) ? data.diagnosis : [data.diagnosis];
+    diagnoses.flatMap((item) => String(fieldValue(item?.value ?? item) || "").split(/[;,]/)).map((item) => item.trim()).filter(Boolean).forEach((diagnosis) => {
+      diagnosisCounts.set(diagnosis, (diagnosisCounts.get(diagnosis) || 0) + 1);
+    });
+  });
+  const topCounts = (counts) => [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 5)
+    .map(([label, count]) => ({ label, count }));
 
   res.render("pages/dashboard", {
     pageTitle: "Dashboard",
@@ -936,8 +1714,71 @@ app.get("/dashboard", asyncHandler(async (req, res) => {
       todayDocs: statTodayDocs,
       needsReview: statNeedsReview,
     },
+    analytics: {
+      totalPatients: statPatients,
+      totalVisits: totalVisitsCount,
+      prescriptionsProcessed: processedDocumentsCount,
+      pendingReviews: statNeedsReview,
+      recordsAddedToday: statTodayDocs,
+      commonMedicines: topCounts(medicineCounts),
+      commonDiagnoses: topCounts(diagnosisCounts),
+    },
+    doctorMetrics: {
+      documentsProcessed: processedDocumentsCount,
+      automaticallyValidated: automaticallyValidatedCount,
+      requireAttention: statNeedsReview,
+    },
     pendingQueue,
     recentClinicalRecords,
+  });
+}));
+
+// Evaluation metrics are deliberately evidence-based. The system reports
+// workflow measurements, but never presents proxy audit counts as clinical
+// accuracy claims without a labeled reference dataset.
+app.get("/api/analytics/evaluation", asyncHandler(async (req, res) => {
+  const patientIds = await Patient.find(patientAccessQuery(req)).distinct("_id");
+  const documentScope = documentAccessQuery(req, patientIds);
+  const documents = await ClinicalDocument.find(documentScope).select("_id createdAt verifiedAt status").lean();
+  const documentIds = new Set(documents.map((document) => String(document._id)));
+  const auditLogs = await AuditLog.find({
+    clinic: req.session.currentClinic || CLINIC_NAME,
+    $or: [{ patient: { $in: patientIds } }, { document: { $in: [...documentIds] } }],
+  }).select("action timestamp document patient details").sort({ timestamp: 1 }).lean();
+  const scopedAuditLogs = auditLogs.filter((log) => !log.document || documentIds.has(String(log.document)));
+  const fieldReviewLogs = scopedAuditLogs.filter((log) => ["FIELD_VERIFIED", "FIELD_CORRECTED", "FIELD_UNCLEAR"].includes(log.action));
+  const correctionLogs = fieldReviewLogs.filter((log) => log.action === "FIELD_CORRECTED");
+  const verificationLogs = fieldReviewLogs.filter((log) => log.action === "FIELD_VERIFIED");
+  const reviewedDocuments = new Set(fieldReviewLogs.filter((log) => log.document).map((log) => String(log.document)));
+  const extractionDocuments = new Set(scopedAuditLogs.filter((log) => log.action === "AI_EXTRACTION" && log.document).map((log) => String(log.document)));
+  const extractionToReviewMinutes = [];
+  for (const correction of correctionLogs) {
+    const extraction = [...scopedAuditLogs].reverse().find((log) => log.document && String(log.document) === String(correction.document) && log.action === "AI_EXTRACTION" && new Date(log.timestamp) <= new Date(correction.timestamp));
+    if (extraction) extractionToReviewMinutes.push((new Date(correction.timestamp) - new Date(extraction.timestamp)) / 60000);
+  }
+  const processingMinutes = documents
+    .filter((document) => document.verifiedAt && document.createdAt)
+    .map((document) => (new Date(document.verifiedAt) - new Date(document.createdAt)) / 60000)
+    .filter((minutes) => Number.isFinite(minutes) && minutes >= 0);
+  const average = (values) => values.length ? Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(2)) : null;
+  res.json({
+    scope: { clinic: req.session.currentClinic || CLINIC_NAME, authorizedPatients: patientIds.length, authorizedDocuments: documents.length },
+    metrics: {
+      fieldReviewEvents: fieldReviewLogs.length,
+      correctedFieldEvents: correctionLogs.length,
+      verifiedWithoutCorrectionEvents: verificationLogs.length,
+      reviewRate: documents.length ? Number(((reviewedDocuments.size / documents.length) * 100).toFixed(2)) : null,
+      extractionToReviewMinutes: average(extractionToReviewMinutes),
+      documentProcessingMinutes: average(processingMinutes),
+      indexedExtractionDocuments: extractionDocuments.size,
+      patientMatchingAccuracy: null,
+      falsePatientMatches: null,
+    },
+    evaluationNotes: [
+      "Patient matching accuracy and false-match rate require a labeled evaluation set; they are not inferred from clinician actions.",
+      "Field review counts measure workflow behavior, not ground-truth extraction accuracy.",
+      "Add a de-identified reference set before publishing accuracy percentages.",
+    ],
   });
 }));
 
@@ -953,19 +1794,29 @@ app.get("/upload", asyncHandler(async (req, res) => {
 
 function clinicalUploadPageMiddleware(req, res, next) {
   upload.single("file")(req, res, (error) => {
-    if (error) return redirectWithFlash(req, res, "/upload", "danger", error.code === "LIMIT_FILE_SIZE" ? "This record is larger than the 15 MB upload limit." : error.message);
+    if (error) {
+      const message = error.code === "LIMIT_FILE_SIZE"
+        ? "This record is larger than the 15 MB upload limit."
+        : (isProduction ? "The clinical record could not be uploaded." : error.message);
+      return redirectWithFlash(req, res, "/upload", "danger", message);
+    }
     next();
   });
 }
 
 function clinicalUploadApiMiddleware(req, res, next) {
   upload.single("file")(req, res, (error) => {
-    if (error) return res.status(error.code === "LIMIT_FILE_SIZE" ? 413 : 400).json({ error: error.message });
+    if (error) {
+      const message = error.code === "LIMIT_FILE_SIZE"
+        ? "This record is larger than the 15 MB upload limit."
+        : (isProduction ? "The clinical record could not be uploaded." : error.message);
+      return res.status(error.code === "LIMIT_FILE_SIZE" ? 413 : 400).json({ error: message });
+    }
     next();
   });
 }
 
-app.post("/documents/upload", clinicalUploadPageMiddleware, asyncHandler(async (req, res) => {
+app.post("/documents/upload", uploadRateLimit, clinicalUploadPageMiddleware, asyncHandler(async (req, res) => {
   if (!req.file) return redirectWithFlash(req, res, "/upload", "danger", "Choose a clinical record before continuing.");
   try {
     const { document, patient } = await processDocumentUpload(req, req.body.patientId, req.file);
@@ -981,7 +1832,7 @@ app.post("/documents/upload", clinicalUploadPageMiddleware, asyncHandler(async (
     redirectWithFlash(req, res, destination, extractionUnavailable ? "danger" : "success", message);
   } catch (error) {
     await fsPromises.unlink(req.file.path).catch(() => {});
-    redirectWithFlash(req, res, "/upload", "danger", error.message);
+    redirectWithFlash(req, res, "/upload", "danger", isProduction ? "The clinical record could not be processed." : error.message);
   }
 }));
 
@@ -1049,6 +1900,9 @@ app.post("/documents/:id/match", asyncHandler(async (req, res) => {
 
   if (!patient) return redirectWithFlash(req, res, `/documents/${document._id}/match`, "danger", "Select an authorized patient or create a new patient profile.");
   document.patient = patient._id;
+  document.processingStatus = "DOCTOR_REVIEW_REQUIRED";
+  document.requiresDoctorReview = true;
+  document.processingError = "";
   await document.save();
   await ClinicalExtraction.updateOne({ document: document._id }, { $set: { patient: patient._id } });
   await recordAudit("PATIENT_MATCH", { document: document._id, patient: patient._id, actorId: req.currentUser?._id || null, actorName: currentDoctorName(req), clinic: req.session.currentClinic, data: { method: "clinician_confirmed" } });
@@ -1064,14 +1918,15 @@ app.post("/documents/:id/match", asyncHandler(async (req, res) => {
   redirectWithFlash(req, res, `/review/${document._id}`, "success", `Patient confirmed (${patient.fullName}). Review the extracted fields before approval.`);
 }));
 
-app.post("/api/patients/:patientId/documents", clinicalUploadApiMiddleware, asyncHandler(async (req, res) => {
+app.post("/api/patients/:patientId/documents", uploadRateLimit, clinicalUploadApiMiddleware, asyncHandler(async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "Choose a clinical record before continuing." });
   try {
     const { document, patient, extracted } = await processDocumentUpload(req, req.params.patientId, req.file);
     res.status(201).json({ patientId: patient._id, documentId: document._id, status: document.status, documentType: document.documentType, extracted });
   } catch (error) {
     await fsPromises.unlink(req.file.path).catch(() => {});
-    res.status(error.message.includes("not found") || error.message.includes("authorized") ? 404 : 400).json({ error: error.message });
+    const status = error.message.includes("not found") || error.message.includes("authorized") ? 404 : 400;
+    res.status(status).json({ error: isProduction ? "The clinical record could not be processed." : error.message });
   }
 }));
 
@@ -1203,9 +2058,6 @@ app.post("/documents/:id/verify", asyncHandler(async (req, res) => {
   if (!document.patient) {
     return redirectWithFlash(req, res, `/review/${document._id}`, "danger", "Please confirm or link a patient before approving and locking this clinical record.");
   }
-  if (req.body.identityConfirmed !== "yes" || req.body.dosageConfirmed !== "yes" || req.body.flagsConfirmed !== "yes") {
-    return redirectWithFlash(req, res, `/review/${document._id}`, "danger", "Complete all three human-verification checks before signing this record.");
-  }
   if (!String(req.body.doctorName || currentDoctorName(req)).trim()) {
     return redirectWithFlash(req, res, `/review/${document._id}`, "danger", "A signing healthcare professional is required.");
   }
@@ -1220,6 +2072,13 @@ app.post("/documents/:id/verify", asyncHandler(async (req, res) => {
     existingDraft?.payload?.structuredData || extraction?.structuredData || document.extractedRecord?.structuredJson || null,
   );
   const correctedFields = safeJson(req.body.correctedFieldsJson, existingDraft?.fieldStates || {});
+
+  if (req.body.exceptionsReviewed !== "yes") {
+    return redirectWithFlash(req, res, `/review/${document._id}`, "danger", "Confirm that the highlighted exceptions were reviewed before signing this record.");
+  }
+  if (hasUnresolvedReviewExceptions(structuredData, medications, labResults)) {
+    return redirectWithFlash(req, res, `/review/${document._id}`, "danger", "Resolve all required extraction exceptions before approving this clinical record.");
+  }
 
   const verificationNotes = String(req.body.doctorNotes ?? existingDraft?.payload?.doctorNotes ?? "").trim();
   const summary = String(req.body.summary ?? existingDraft?.payload?.summary ?? document.extractedRecord?.aiSummary ?? "").trim();
@@ -1347,8 +2206,16 @@ app.post("/documents/:id/verify", asyncHandler(async (req, res) => {
     ]);
     if (populatedDoc) clinicalSearchEngine.indexSingleDocument(populatedDoc);
     if (populatedRecord) clinicalSearchEngine.indexSingleRecord(populatedRecord);
+    if (populatedDoc && populatedRecord?.patient) {
+      await indexClinicalRecord({
+        clinic: req.session.currentClinic || CLINIC_NAME,
+        patient: populatedRecord.patient,
+        document: populatedDoc,
+        record: populatedRecord,
+      });
+    }
   } catch (err) {
-    console.warn("Search index update failed:", err.message);
+    console.warn("Search or RAG index update failed:", err.message);
   }
 
   if (req.xhr || req.headers.accept?.includes("application/json") || req.body.ajax === "true") {
@@ -1391,6 +2258,68 @@ app.get("/patients", asyncHandler(async (req, res) => {
   res.render("pages/patients", { pageTitle: "Patients", patients: patients.map((patient) => ({ ...patient, counts: countMap.get(String(patient._id)) || { documents: 0, alerts: 0 } })), search });
 }));
 
+// Instant, access-scoped patient retrieval for the clinician search workflow.
+// The response deliberately includes only clinician-approved longitudinal data.
+app.get("/api/patients/search", searchRateLimit, asyncHandler(async (req, res) => {
+  const queryText = String(req.query.q || req.query.search || "").trim();
+  if (queryText.length < 2) return res.json({ query: queryText, results: [] });
+
+  const safeSearch = escapeRegExp(queryText);
+  const accessQuery = patientAccessQuery(req);
+  const patients = await Patient.find({
+    $and: [accessQuery, { $or: [{ fullName: new RegExp(safeSearch, "i") }, { mrn: new RegExp(safeSearch, "i") }, { phone: new RegExp(safeSearch, "i") }] }],
+  }).sort({ fullName: 1 }).limit(12).lean();
+  if (!patients.length) return res.json({ query: queryText, results: [] });
+
+  const patientIds = patients.map((patient) => patient._id);
+  const approvedDocuments = await ClinicalDocument.find({ patient: { $in: patientIds } }).lean();
+  await Promise.all(approvedDocuments.filter(isDocumentApproved).map((document) => ensureMedicalRecordForDocument(document, req)));
+  const [records, soapNotes] = await Promise.all([
+    MedicalRecord.find({ patient: { $in: patientIds }, doctorVerified: true }).sort({ createdAt: 1 }).lean(),
+    SOAPNote.find({ patient: { $in: patientIds } }).sort({ createdAt: -1 }).lean(),
+  ]);
+  const recordsByPatient = new Map();
+  const notesByPatient = new Map();
+  records.forEach((record) => {
+    const key = String(record.patient);
+    if (!recordsByPatient.has(key)) recordsByPatient.set(key, []);
+    recordsByPatient.get(key).push(record);
+  });
+  soapNotes.forEach((note) => {
+    const key = String(note.patient);
+    if (!notesByPatient.has(key)) notesByPatient.set(key, []);
+    notesByPatient.get(key).push(note);
+  });
+
+  const results = patients.map((patient) => {
+    const intelligence = buildPatientHistoryIntelligence(
+      patient,
+      recordsByPatient.get(String(patient._id)) || [],
+      notesByPatient.get(String(patient._id)) || [],
+    );
+    return {
+      patient: {
+        _id: patient._id,
+        fullName: patient.fullName,
+        mrn: patient.mrn,
+        age: patient.age,
+        gender: patient.gender,
+        phone: patient.phone,
+      },
+      profileUrl: `/patients/${patient._id}`,
+      summary: intelligence.atAGlance,
+      totalVisits: intelligence.overview?.totalVisits || 0,
+      lastVisit: intelligence.overview?.mostRecentVisit || "Not documented in available records.",
+      medicationHistory: intelligence.medicationHistory,
+      diagnosisHistory: intelligence.clinicalHistory?.diagnoses || ["Not documented in available records."],
+      investigationHistory: intelligence.investigationHistory,
+      timeline: intelligence.timeline || [],
+      sourceEvidence: intelligence.sourceEvidence || [],
+    };
+  });
+  res.json({ query: queryText, results });
+}));
+
 app.post("/api/patients", asyncHandler(async (req, res) => {
   if (!req.currentUser && !localAccessAllowed()) return res.status(401).json({ error: "Sign in as an authorized clinician before creating a patient." });
   const fullName = String(req.body.fullName || req.body.name || "").trim();
@@ -1428,10 +2357,114 @@ app.post("/api/patients", asyncHandler(async (req, res) => {
 app.get("/patients/:id", asyncHandler(async (req, res) => {
   const context = await loadPatientContext(req, req.params.id);
   if (!context) return res.status(404).render("pages/error", { pageTitle: "Patient not found", message: "This patient profile is no longer available." });
+  const historyIntelligence = await generatePatientHistorySummary(
+    context.patient,
+    buildPatientHistoryIntelligence(context.patient, context.medicalRecords, context.soapNotes),
+  );
   const verifiedDocuments = context.documents.filter(isDocumentApproved);
   const labs = verifiedDocuments.flatMap((doc) => (doc.labResults || []).map((lab) => ({ ...lab, documentName: doc.originalFilename, recordedAt: lab.testDate || doc.createdAt }))).sort((a, b) => new Date(a.recordedAt) - new Date(b.recordedAt));
   const trends = labs.filter((lab) => lab.numericValue !== null && lab.numericValue !== undefined).reduce((groups, lab) => { const key = /glucose|sugar|fbs/i.test(lab.testName) ? "glucose" : /hba1c/i.test(lab.testName) ? "hba1c" : /creatinine/i.test(lab.testName) ? "creatinine" : /cholesterol|ldl/i.test(lab.testName) ? "cholesterol" : null; if (key) (groups[key] ||= []).push(lab); return groups; }, {});
-  res.render("pages/patient", { pageTitle: context.patient.fullName, ...context, timeline: timelineFor(context.patient, verifiedDocuments), trends });
+  res.render("pages/patient", { pageTitle: context.patient.fullName, ...context, historyIntelligence, timeline: timelineFor(context.patient, verifiedDocuments), trends });
+}));
+
+function buildClinicalHandoffText(patient, intelligence, reason, sourceDocuments = []) {
+  const list = (value) => Array.isArray(value) && value.length ? value.join("; ") : "Not documented in available records.";
+  const clinical = intelligence?.clinicalHistory || {};
+  const medication = intelligence?.medicationHistory || {};
+  const investigations = intelligence?.investigationHistory || {};
+  const recent = Array.isArray(intelligence?.recentHistory) ? intelligence.recentHistory.slice(0, 3) : [];
+  const timeline = recent.length
+    ? recent.map((visit) => `${visit.dateLabel || "Date not documented"}: ${visit.title || "Visit"}; diagnoses: ${list(visit.diagnosis)}; medications: ${list(visit.medications)}`).join("\n")
+    : "Not documented in available records.";
+  const documentedChanges = list(intelligence?.changesSincePreviousVisit);
+  const supportingDocuments = sourceDocuments.length
+    ? sourceDocuments.map((document) => `${document.originalFilename || "Clinical document"} (${document.documentType || "record"})`).join("; ")
+    : "Not documented in available records.";
+  return [
+    `CLINICAL HANDOFF — ${patient.fullName}`,
+    `Patient ID / MRN: ${patient.mrn || "Not documented in available records."}`,
+    `Reason for referral: ${String(reason || "").trim() || "Not documented in available records."}`,
+    "",
+    `Documented clinical history: ${list(clinical.diagnoses)}`,
+    `Documented symptoms / observations: ${list(clinical.symptomsObservations)}`,
+    `Medication history: ${list(medication.previouslyPrescribed)}`,
+    `Currently documented medicines: ${list(medication.currentlyDocumented)}`,
+    `Investigation history: ${list(investigations.previousInvestigations)}`,
+    `Important documented results: ${list(investigations.importantResults)}`,
+    `Documented changes: ${documentedChanges}`,
+    "Recent documented visits:",
+    timeline,
+    `Supporting source documents: ${supportingDocuments}`,
+    "",
+    "This handoff is a source-backed documentation aid. It contains no autonomous diagnosis or treatment recommendation. Confirm all details against the linked original records.",
+  ].join("\n");
+}
+
+app.get("/patients/:id/handoff/new", requireRoles("DOCTOR", "ADMIN"), asyncHandler(async (req, res) => {
+  const context = await loadPatientContext(req, req.params.id);
+  if (!context) return res.status(404).render("pages/error", { pageTitle: "Patient not found", message: "This patient profile is no longer available." });
+  const intelligence = buildPatientHistoryIntelligence(context.patient, context.medicalRecords, context.soapNotes);
+  const sourceDocuments = context.documents.filter(isDocumentApproved);
+  res.render("pages/handoff", { pageTitle: `Generate handoff · ${context.patient.fullName}`, patient: context.patient, intelligence, handoff: null, sourceDocuments, reason: "", draftText: buildClinicalHandoffText(context.patient, intelligence, "", sourceDocuments) });
+}));
+
+app.post("/patients/:id/handoff", requireRoles("DOCTOR", "ADMIN"), asyncHandler(async (req, res) => {
+  const context = await loadPatientContext(req, req.params.id);
+  if (!context) return res.status(404).render("pages/error", { pageTitle: "Patient not found", message: "This patient profile is no longer available." });
+  const intelligence = buildPatientHistoryIntelligence(context.patient, context.medicalRecords, context.soapNotes);
+  const reason = String(req.body.reason || "").trim().slice(0, 1200);
+  const verifiedDocuments = context.documents.filter(isDocumentApproved);
+  const handoff = await ClinicalHandoff.create({
+    patient: context.patient._id,
+    createdBy: req.currentUser?._id || null,
+    createdByName: currentDoctorName(req),
+    clinicName: req.session.currentClinic || CLINIC_NAME,
+    summary: buildClinicalHandoffText(context.patient, intelligence, reason, verifiedDocuments),
+    sourceDocuments: verifiedDocuments.map((document) => document._id),
+    sourceRecords: context.medicalRecords.map((record) => record._id),
+    status: "DRAFT",
+  });
+  await recordAudit("HANDOFF_GENERATED", { patient: context.patient._id, actorId: req.currentUser?._id || null, actorName: currentDoctorName(req), resourceType: "ClinicalHandoff", resourceId: handoff._id, data: { handoffId: handoff._id, sourceDocumentCount: verifiedDocuments.length, sourceRecordCount: context.medicalRecords.length } });
+  res.redirect(`/handoffs/${handoff._id}`);
+}));
+
+app.get("/handoffs/:id", requireRoles("DOCTOR", "ADMIN"), asyncHandler(async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).render("pages/error", { pageTitle: "Handoff not found", message: "The clinical handoff could not be found." });
+  const handoff = await ClinicalHandoff.findById(req.params.id)
+    .populate("patient", "fullName mrn age gender")
+    .populate("sourceDocuments", "originalFilename documentType createdAt")
+    .populate("sourceRecords", "title recordType createdAt")
+    .lean();
+  if (!handoff || !handoff.patient || !(await findAccessiblePatient(req, handoff.patient._id, { _id: 1 }))) return res.status(404).render("pages/error", { pageTitle: "Handoff not found", message: "The clinical handoff is unavailable or access is denied." });
+  res.render("pages/handoff", { pageTitle: `Clinical handoff · ${handoff.patient.fullName}`, patient: handoff.patient, handoff, sourceDocuments: handoff.sourceDocuments || [], intelligence: null, reason: "", draftText: handoff.summary });
+}));
+
+app.post("/handoffs/:id/approve", requireRoles("DOCTOR", "ADMIN"), asyncHandler(async (req, res) => {
+  const handoff = await ClinicalHandoff.findById(req.params.id);
+  if (!handoff || !(await findAccessiblePatient(req, handoff.patient, { _id: 1 }))) return res.status(404).send("Handoff not found or access denied.");
+  handoff.status = "APPROVED";
+  handoff.approvedAt = new Date();
+  handoff.approvedBy = req.currentUser?._id || null;
+  await handoff.save();
+  await recordAudit("HANDOFF_APPROVED", { patient: handoff.patient, actorId: req.currentUser?._id || null, actorName: currentDoctorName(req), resourceType: "ClinicalHandoff", resourceId: handoff._id, data: { handoffId: handoff._id } });
+  redirectWithFlash(req, res, `/handoffs/${handoff._id}`, "success", "Clinical handoff approved. It is ready to share or export.");
+}));
+
+app.post("/handoffs/:id/share", requireRoles("DOCTOR", "ADMIN"), asyncHandler(async (req, res) => {
+  const handoff = await ClinicalHandoff.findById(req.params.id);
+  if (!handoff || !(await findAccessiblePatient(req, handoff.patient, { _id: 1 }))) return res.status(404).send("Handoff not found or access denied.");
+  if (handoff.status !== "APPROVED" && handoff.status !== "SHARED") return redirectWithFlash(req, res, `/handoffs/${handoff._id}`, "danger", "Approve the handoff before sharing it.");
+  handoff.status = "SHARED";
+  handoff.sharedAt = new Date();
+  await handoff.save();
+  await recordAudit("HANDOFF_SHARED", { patient: handoff.patient, actorId: req.currentUser?._id || null, actorName: currentDoctorName(req), resourceType: "ClinicalHandoff", resourceId: handoff._id, data: { handoffId: handoff._id } });
+  redirectWithFlash(req, res, `/handoffs/${handoff._id}`, "success", "Clinical handoff marked as shared.");
+}));
+
+app.get("/handoffs/:id/export", requireRoles("DOCTOR", "ADMIN"), asyncHandler(async (req, res) => {
+  const handoff = await ClinicalHandoff.findById(req.params.id).populate("patient", "fullName").lean();
+  if (!handoff || handoff.status === "DRAFT" || !handoff.patient || !(await findAccessiblePatient(req, handoff.patient._id, { _id: 1 }))) return res.status(403).send("Only an approved handoff can be exported.");
+  res.type("text/plain").set("Content-Disposition", `attachment; filename="DEUS-clinical-handoff-${handoff.patient.fullName.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.txt"`).send(handoff.summary);
 }));
 
 app.get("/assistant", asyncHandler(async (req, res) => {
@@ -1440,13 +2473,20 @@ app.get("/assistant", asyncHandler(async (req, res) => {
 }));
 
 app.get("/api/patients/:patientId/history", asyncHandler(async (req, res) => {
-  const patient = await findAccessiblePatient(req, req.params.patientId, { _id: 1 });
+  const patient = await findAccessiblePatient(req, req.params.patientId);
   if (!patient) return res.status(404).json({ error: "Patient not found or access denied." });
   const documents = await ClinicalDocument.find({ patient: patient._id }).lean();
   const verifiedDocuments = documents.filter(isDocumentApproved);
   await Promise.all(verifiedDocuments.map((document) => ensureMedicalRecordForDocument(document, req)));
-  const records = await MedicalRecord.find({ patient: patient._id, doctorVerified: true }).populate("document", "originalFilename documentType createdAt").sort({ createdAt: -1 }).lean();
-  res.json({ patientId: patient._id, records });
+  const [records, soapNotes] = await Promise.all([
+    MedicalRecord.find({ patient: patient._id, doctorVerified: true }).populate("document", "originalFilename documentType createdAt").sort({ createdAt: -1 }).lean(),
+    SOAPNote.find({ patient: patient._id }).sort({ createdAt: -1 }).lean(),
+  ]);
+  const historyIntelligence = await generatePatientHistorySummary(
+    patient,
+    buildPatientHistoryIntelligence(patient, records, soapNotes),
+  );
+  res.json({ patientId: patient._id, records, summary: historyIntelligence });
 }));
 
 app.get("/api/patients/:patientId/documents", asyncHandler(async (req, res) => {
@@ -1482,7 +2522,7 @@ app.get("/api/conversations/:conversationId/messages", asyncHandler(async (req, 
   res.json({ conversation, messages });
 }));
 
-app.post("/api/conversations/:conversationId/messages", asyncHandler(async (req, res) => {
+app.post("/api/conversations/:conversationId/messages", assistantRateLimit, asyncHandler(async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.conversationId)) return res.status(404).json({ error: "Conversation not found." });
   const conversation = await Conversation.findById(req.params.conversationId);
   if (!conversation) return res.status(404).json({ error: "Conversation not found." });
@@ -1491,19 +2531,19 @@ app.post("/api/conversations/:conversationId/messages", asyncHandler(async (req,
   const message = String(req.body.message || req.body.content || "").trim();
   if (!message) return res.status(400).json({ error: "Message is required." });
   await Message.create({ conversation: conversation._id, role: "USER", content: message });
-  const [documents, soapNotes] = await Promise.all([
-    ClinicalDocument.find({ patient: patient._id }).sort({ createdAt: -1 }).lean(),
-    SOAPNote.find({ patient: patient._id }).sort({ createdAt: -1 }).lean(),
+  const [ragContext, soapNotes] = await Promise.all([
+    buildPatientRagContext(req, patient, message),
+    SOAPNote.find({ patient: patient._id, isSigned: true }).sort({ createdAt: -1 }).lean(),
   ]);
-  const result = await answerClinicalQuestion(patient, documents, soapNotes, message);
+  const result = await answerClinicalQuestion(patient, ragContext.documents, soapNotes, message, ragContext);
   const assistantMessage = await Message.create({ conversation: conversation._id, role: "ASSISTANT", content: result.reply });
   conversation.updatedAt = new Date();
   await conversation.save();
-  await recordAudit("ASSISTANT_QUERY", { patient: patient._id, actorName: currentDoctorName(req), data: { conversationId: conversation._id, question: message.slice(0, 300) } });
+  await recordAudit("ASSISTANT_QUERY", { patient: patient._id, actorName: currentDoctorName(req), data: { conversationId: conversation._id, question: message.slice(0, 300), ragSourceCount: ragContext.chunks.length, ragDocumentIds: ragContext.documentIds } });
   res.json({ ...result, conversationId: conversation._id, messageId: assistantMessage._id });
 }));
 
-app.post("/api/assistant/chat", asyncHandler(async (req, res) => {
+app.post("/api/assistant/chat", assistantRateLimit, asyncHandler(async (req, res) => {
   const patient = await findAccessiblePatient(req, req.body.patientId);
   if (!patient) return res.status(404).json({ error: "Patient not found" });
   const message = String(req.body.message || "").trim();
@@ -1513,17 +2553,19 @@ app.post("/api/assistant/chat", asyncHandler(async (req, res) => {
   let conversation = requestedConversationId ? await Conversation.findOne({ _id: requestedConversationId, patient: patient._id }) : null;
   if (!conversation) conversation = await Conversation.create({ patient: patient._id, doctor: req.currentUser?._id || null, doctorName: currentDoctorName(req), title: message.slice(0, 180) });
   await Message.create({ conversation: conversation._id, role: "USER", content: message });
-  const documents = await ClinicalDocument.find({ patient: patient._id }).sort({ createdAt: -1 }).lean();
-  const soapNotes = await SOAPNote.find({ patient: patient._id }).sort({ createdAt: -1 }).lean();
-  const result = await answerClinicalQuestion(patient, documents, soapNotes, message);
+  const [ragContext, soapNotes] = await Promise.all([
+    buildPatientRagContext(req, patient, message),
+    SOAPNote.find({ patient: patient._id, isSigned: true }).sort({ createdAt: -1 }).lean(),
+  ]);
+  const result = await answerClinicalQuestion(patient, ragContext.documents, soapNotes, message, ragContext);
   const assistantMessage = await Message.create({ conversation: conversation._id, role: "ASSISTANT", content: result.reply });
   conversation.updatedAt = new Date();
   await conversation.save();
-  await recordAudit("ASSISTANT_QUERY", { patient: patient._id, actorName: currentDoctorName(req), data: { conversationId: conversation._id, question: message.slice(0, 300) } });
+  await recordAudit("ASSISTANT_QUERY", { patient: patient._id, actorName: currentDoctorName(req), data: { conversationId: conversation._id, question: message.slice(0, 300), ragSourceCount: ragContext.chunks.length, ragDocumentIds: ragContext.documentIds } });
   res.json({ ...result, conversationId: conversation._id, messageId: assistantMessage._id });
 }));
 
-app.post("/api/assistant/soap", asyncHandler(async (req, res) => {
+app.post("/api/assistant/soap", assistantRateLimit, asyncHandler(async (req, res) => {
   const patient = await findAccessiblePatient(req, req.body.patientId);
   if (!patient) return res.status(404).json({ error: "Patient not found" });
   let documentId = null;
@@ -1533,9 +2575,12 @@ app.post("/api/assistant/soap", asyncHandler(async (req, res) => {
     if (!document || String(document.patient) !== String(patient._id)) return res.status(404).json({ error: "Document not found or access denied." });
     documentId = document._id;
   }
-  const documents = await ClinicalDocument.find({ patient: patient._id }).sort({ createdAt: -1 }).lean();
-  const soapNotes = await SOAPNote.find({ patient: patient._id }).sort({ createdAt: -1 }).lean();
-  const content = await generateSoap(patient, documents, soapNotes, req.body.doctorPrompt);
+  const doctorPrompt = String(req.body.doctorPrompt || "").trim();
+  const [ragContext, soapNotes] = await Promise.all([
+    buildPatientRagContext(req, patient, doctorPrompt || "routine clinical summary"),
+    SOAPNote.find({ patient: patient._id, isSigned: true }).sort({ createdAt: -1 }).lean(),
+  ]);
+  const content = await generateSoap(patient, ragContext.documents, soapNotes, doctorPrompt, ragContext);
   const note = await SOAPNote.create({ patient: patient._id, document: documentId, ...content, doctorNotes: req.body.doctorPrompt, isSigned: false });
   await recordAudit("SOAP_DRAFT", { patient: patient._id, document: documentId, data: { noteId: note._id } });
   res.json({ id: note._id, patientId: patient._id, ...content, doctorNotes: note.doctorNotes, isSigned: note.isSigned, createdAt: note.createdAt });
@@ -1820,9 +2865,12 @@ app.get("/integration", asyncHandler(async (req, res) => {
 
 // Clinic Settings
 app.get("/settings", asyncHandler(async (req, res) => {
+  const clinics = req.currentUser?.role === "ADMIN"
+    ? app.locals.activeClinics
+    : [req.currentUser?.clinic || CLINIC_NAME];
   res.render("pages/settings", {
     pageTitle: "Clinic Settings",
-    clinics: app.locals.activeClinics,
+    clinics,
     currentClinic: req.session.currentClinic || CLINIC_NAME,
     clinicianName: currentDoctorName(req),
   });
@@ -1831,7 +2879,10 @@ app.get("/settings", asyncHandler(async (req, res) => {
 // Multi-clinic switcher
 app.post("/settings/clinic", (req, res) => {
   const requestedClinic = String(req.body.clinic || CLINIC_NAME).trim();
-  if (app.locals.activeClinics.includes(requestedClinic)) {
+  const allowedClinics = req.currentUser?.role === "ADMIN"
+    ? app.locals.activeClinics
+    : [req.currentUser?.clinic || CLINIC_NAME];
+  if (allowedClinics.includes(requestedClinic)) {
     req.session.currentClinic = requestedClinic;
     setFlash(req, "success", `Switched clinic context to ${requestedClinic}.`);
   }
@@ -1841,13 +2892,16 @@ app.post("/settings/clinic", (req, res) => {
 });
 
 // Advanced DSA Search Cockpit Route
-app.get("/search", asyncHandler(async (req, res) => {
+app.get("/search", searchRateLimit, asyncHandler(async (req, res) => {
   const query = String(req.query.q || "").trim();
   const category = String(req.query.category || "ALL").toUpperCase();
 
   await refreshScopedSearchIndex(req);
 
-  const dsaResults = query ? clinicalSearchEngine.search(query, { category, limit: 30 }) : null;
+  const indexedQuery = normalizeClinicalSearchQuery(query);
+  const dsaResults = query
+    ? await restrictSearchResultsToAuthorizedScope(req, { ...clinicalSearchEngine.search(indexedQuery, { category, limit: 30 }), query })
+    : null;
 
   res.render("pages/search", {
     pageTitle: query ? `Search: ${query}` : "Clinical Records Search",
@@ -1859,7 +2913,7 @@ app.get("/search", asyncHandler(async (req, res) => {
 }));
 
 // Advanced DSA Clinical Search API
-app.get("/api/search", asyncHandler(async (req, res) => {
+app.get("/api/search", searchRateLimit, asyncHandler(async (req, res) => {
   const query = String(req.query.q || req.query.query || "").trim();
   const category = String(req.query.category || "ALL").toUpperCase();
   if (!query) {
@@ -1878,7 +2932,8 @@ app.get("/api/search", asyncHandler(async (req, res) => {
 
   await refreshScopedSearchIndex(req);
 
-  const dsaResponse = clinicalSearchEngine.search(query, { category, limit: 15 });
+  const indexedQuery = normalizeClinicalSearchQuery(query);
+  const dsaResponse = await restrictSearchResultsToAuthorizedScope(req, { ...clinicalSearchEngine.search(indexedQuery, { category, limit: 15 }), query });
 
   // Map backward-compatible structures for existing frontend dropdowns
   const patients = dsaResponse.results
@@ -1976,7 +3031,7 @@ app.get("/audit", asyncHandler(async (req, res) => {
   const search = String(req.query.search || "").trim();
   const safeSearch = escapeRegExp(search);
   const patientIds = await Patient.find(patientAccessQuery(req)).distinct("_id");
-  const accessScope = { $or: [{ patient: { $in: patientIds } }, { patient: null }] };
+  const accessScope = { clinic: req.session.currentClinic || CLINIC_NAME, $or: [{ patient: { $in: patientIds } }, { patient: null }] };
   const query = search
     ? { $and: [accessScope, { $or: [{ action: new RegExp(safeSearch, "i") }, { actorName: new RegExp(safeSearch, "i") }] }] }
     : accessScope;
@@ -1988,7 +3043,7 @@ app.get("/api/audit/export", asyncHandler(async (req, res) => {
   const search = String(req.query.search || "").trim();
   const safeSearch = escapeRegExp(search);
   const patientIds = await Patient.find(patientAccessQuery(req)).distinct("_id");
-  const accessScope = { $or: [{ patient: { $in: patientIds } }, { patient: null }] };
+  const accessScope = { clinic: req.session.currentClinic || CLINIC_NAME, $or: [{ patient: { $in: patientIds } }, { patient: null }] };
   const query = search
     ? { $and: [accessScope, { $or: [{ action: new RegExp(safeSearch, "i") }, { actorName: new RegExp(safeSearch, "i") }] }] }
     : accessScope;
@@ -2058,21 +3113,59 @@ app.use((error, req, res, _next) => {
 const serverOrigin = isProduction ? PRODUCTION_APP_URL : `http://localhost:${PORT}`;
 const server = app.listen(PORT, () => console.log(`${CLINIC_NAME} running at ${serverOrigin}`));
 
-mongoose.connect(MONGO_URL, { serverSelectionTimeoutMS: Number(process.env.MONGO_SERVER_SELECTION_TIMEOUT_MS || 5000) })
-  .then(async () => {
-    console.log("MongoDB connected");
-    try {
-      const coll = mongoose.connection.db.collection("clinical_extractions");
-      const indexes = await coll.indexes();
-      if (indexes.some((i) => i.name === "mrn_1")) {
-        await coll.dropIndex("mrn_1").catch(() => {});
-        console.log("Cleaned legacy mrn_1 unique index from clinical_extractions");
-      }
-    } catch (_) {}
-    await refreshSearchIndex();
-  })
-  .catch((error) => console.error("MongoDB connection failed:", error.message));
+const mongoServerSelectionTimeoutMs = Number(process.env.MONGO_SERVER_SELECTION_TIMEOUT_MS || 5000);
+const mongoReconnectDelayMs = Number(process.env.MONGO_RECONNECT_DELAY_MS || 5000);
+let mongoRetryTimer = null;
+let mongoBootstrapComplete = false;
+let shuttingDown = false;
 
-process.on("SIGTERM", async () => { await mongoose.connection.close(); server.close(() => process.exit(0)); });
+function scheduleMongoReconnect() {
+  if (shuttingDown || mongoRetryTimer || mongoose.connection.readyState === 1 || mongoose.connection.readyState === 2) return;
+  mongoRetryTimer = setTimeout(() => {
+    mongoRetryTimer = null;
+    connectMongo();
+  }, mongoReconnectDelayMs);
+  mongoRetryTimer.unref?.();
+}
+
+async function connectMongo() {
+  if (shuttingDown || mongoose.connection.readyState === 1 || mongoose.connection.readyState === 2) return;
+  try {
+    await mongoose.connect(MONGO_URL, { serverSelectionTimeoutMS: mongoServerSelectionTimeoutMs });
+    console.log("MongoDB connected");
+
+    if (!mongoBootstrapComplete) {
+      try {
+        const coll = mongoose.connection.db.collection("clinical_extractions");
+        const indexes = await coll.indexes();
+        if (indexes.some((i) => i.name === "mrn_1")) {
+          await coll.dropIndex("mrn_1").catch(() => {});
+          console.log("Cleaned legacy mrn_1 unique index from clinical_extractions");
+        }
+      } catch (_) {}
+      await refreshSearchIndex();
+      mongoBootstrapComplete = true;
+    }
+  } catch (error) {
+    console.error("MongoDB connection failed:", error.message);
+    scheduleMongoReconnect();
+  }
+}
+
+mongoose.connection.on("disconnected", () => {
+  console.error("MongoDB disconnected; retrying connection.");
+  scheduleMongoReconnect();
+});
+mongoose.connection.on("error", (error) => {
+  console.error("MongoDB connection error:", error.message);
+});
+connectMongo();
+
+process.on("SIGTERM", async () => {
+  shuttingDown = true;
+  if (mongoRetryTimer) clearTimeout(mongoRetryTimer);
+  await mongoose.connection.close();
+  server.close(() => process.exit(0));
+});
 
 module.exports = app;

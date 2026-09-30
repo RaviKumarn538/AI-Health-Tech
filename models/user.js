@@ -14,7 +14,8 @@ const userSchema = new mongoose.Schema(
     passwordIterations: { type: Number, default: LEGACY_PASSWORD_ITERATIONS },
     clinic: { type: String, default: "CuraClinic AI" },
     avatar: String,
-    role: { type: String, enum: ["DOCTOR", "ADMIN"], default: "DOCTOR" },
+    role: { type: String, enum: ["DOCTOR", "ADMIN", "STAFF", "PATIENT"], default: "DOCTOR" },
+    patient: { type: mongoose.Schema.Types.ObjectId, ref: "Patient", default: null, index: true },
     lastLoginAt: Date,
   },
   { timestamps: true }

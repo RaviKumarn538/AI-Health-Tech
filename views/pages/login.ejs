@@ -4,8 +4,16 @@
   <div class="auth-card-container">
     <div class="auth-card-header">
       <div class="auth-brand-pill">D</div>
-      <h1 class="auth-title">Sign in to DEUS</h1>
-      <p class="auth-subtitle">Secure access to the clinical intelligence workspace.</p>
+      <h1 class="auth-title"><%= typeof mode !== 'undefined' && mode === 'signup' ? 'Create Clinician Account' : 'Sign in to DEUS' %></h1>
+      <p class="auth-subtitle"><%= typeof mode !== 'undefined' && mode === 'signup' ? 'Register for secure access to the clinical intelligence workspace.' : 'Secure access to the clinical intelligence workspace.' %></p>
+    </div>
+
+    <!-- Mode Switcher Tabs -->
+    <div class="auth-tabs" role="tablist">
+      <a href="/login?mode=login<%= typeof nextUrl !== 'undefined' && nextUrl ? '&next=' + encodeURIComponent(nextUrl) : '' %>" class="auth-tab <%= (typeof mode === 'undefined' || mode !== 'signup') ? 'is-active' : '' %>">Sign In</a>
+      <% if (typeof clinicianSignupEnabled === 'undefined' || clinicianSignupEnabled) { %>
+        <a href="/login?mode=signup<%= typeof nextUrl !== 'undefined' && nextUrl ? '&next=' + encodeURIComponent(nextUrl) : '' %>" class="auth-tab <%= (typeof mode !== 'undefined' && mode === 'signup') ? 'is-active' : '' %>">Create Account</a>
+      <% } %>
     </div>
 
     <% if (typeof signedOut !== 'undefined' && signedOut) { %>
@@ -22,26 +30,99 @@
       </div>
     <% } %>
 
-    <% if (googleConfigured) { %>
-      <a class="btn-google-sso" href="/auth/google?next=<%= encodeURIComponent(typeof nextUrl !== 'undefined' ? nextUrl : '/dashboard') %>">
+    <% if (typeof flash !== 'undefined' && flash && flash.message) { %>
+      <div class="clinical-flash flash-<%= flash.type || 'info' %>" role="status">
+        <span class="flash-icon"><%= flash.type === 'danger' ? '⚠' : '✓' %></span>
+        <span class="flash-text"><%= flash.message %></span>
+      </div>
+    <% } %>
+
+    <% if (typeof googleConfigured !== 'undefined' && googleConfigured) { %>
+      <a class="btn-google-sso" href="/auth/google?next=<%= encodeURIComponent(typeof nextUrl !== 'undefined' && nextUrl ? nextUrl : '/dashboard') %>">
         <svg class="google-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
           <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3h3.88c2.27-2.09 3.665-5.17 3.665-9.09z"/>
           <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.26v3.09C3.26 21.36 7.36 24 12 24z"/>
           <path fill="#FBBC05" d="M5.28 14.32c-.25-.72-.38-1.49-.38-2.32s.13-1.6.38-2.32V6.59H1.26C.46 8.18 0 9.99 0 12s.46 3.82 1.26 5.41l4.02-3.09z"/>
           <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.36 0 3.26 2.64 1.26 6.59l4.02 3.09c.95-2.83 3.6-4.93 6.72-4.93z"/>
         </svg>
-        <span>Sign in with Google</span>
+        <span><%= typeof mode !== 'undefined' && mode === 'signup' ? 'Sign up with Google' : 'Sign in with Google' %></span>
         <span class="btn-arrow">→</span>
       </a>
-    <% } else { %>
-      <div class="sso-notice-box" role="alert">
-        <div class="sso-notice-title">
-          <span class="notice-icon">🔒</span>
-          <span>Sign-in is temporarily unavailable</span>
-        </div>
-        <p class="sso-notice-desc">Please contact the administrator to enable secure clinician sign-in.</p>
+
+      <div class="auth-divider">
+        <span>OR CONTINUE WITH EMAIL</span>
       </div>
     <% } %>
+
+    <% if (typeof mode !== 'undefined' && mode === 'signup' && (typeof clinicianSignupEnabled === 'undefined' || clinicianSignupEnabled)) { %>
+      <!-- Clinician Registration Form -->
+      <form action="/signup" method="POST" class="auth-credentials-form" id="signupForm">
+        <input type="hidden" name="next" value="<%= typeof nextUrl !== 'undefined' ? nextUrl : '/dashboard' %>">
+
+        <div class="auth-field">
+          <label class="auth-label" for="signupName">Clinician Full Name</label>
+          <input type="text" id="signupName" name="name" class="auth-input" placeholder="e.g. Dr. Rajesh Sharma" required autocomplete="name">
+        </div>
+
+        <div class="auth-field">
+          <label class="auth-label" for="signupEmail">Work Email</label>
+          <input type="email" id="signupEmail" name="email" class="auth-input" placeholder="doctor@hospital.org" required autocomplete="email">
+        </div>
+
+        <div class="auth-field">
+          <div class="label-with-hint">
+            <label class="auth-label" for="signupPassword">Create Password</label>
+            <span class="auth-field-hint">Min 12 characters</span>
+          </div>
+          <div class="auth-password-wrap">
+            <input type="password" id="signupPassword" name="password" class="auth-input" placeholder="••••••••" minlength="12" required autocomplete="new-password">
+            <button type="button" class="auth-password-toggle js-toggle-pwd" data-target="#signupPassword" aria-label="Toggle password visibility">Show</button>
+          </div>
+        </div>
+
+        <div class="auth-field">
+          <label class="auth-label" for="signupClinic">Clinic / Hospital Affiliation (Optional)</label>
+          <input type="text" id="signupClinic" name="clinic" class="auth-input" placeholder="e.g. DEUS Clinical Center" autocomplete="organization">
+        </div>
+
+        <button type="submit" class="btn-auth-submit">
+          <span>Create Clinician Account</span>
+          <span class="btn-arrow">→</span>
+        </button>
+      </form>
+    <% } else { %>
+      <!-- Clinician Sign-In Form -->
+      <form action="/login" method="POST" class="auth-credentials-form" id="loginForm">
+        <input type="hidden" name="next" value="<%= typeof nextUrl !== 'undefined' ? nextUrl : '/dashboard' %>">
+
+        <div class="auth-field">
+          <label class="auth-label" for="loginEmail">Clinician Email</label>
+          <input type="email" id="loginEmail" name="email" class="auth-input" placeholder="doctor@hospital.org" required autocomplete="email">
+        </div>
+
+        <div class="auth-field">
+          <div class="label-with-hint">
+            <label class="auth-label" for="loginPassword">Password</label>
+            <span class="auth-field-hint"></span>
+          </div>
+          <div class="auth-password-wrap">
+            <input type="password" id="loginPassword" name="password" class="auth-input" placeholder="••••••••" required autocomplete="current-password">
+            <button type="button" class="auth-password-toggle js-toggle-pwd" data-target="#loginPassword" aria-label="Toggle password visibility">Show</button>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-auth-submit">
+          <span>Sign In to Workstation</span>
+          <span class="btn-arrow">→</span>
+        </button>
+      </form>
+    <% } %>
+
+    <div class="auth-workflow-links" aria-label="Other DEUS workflows">
+      <span>Other secure access</span>
+      <a href="/login?next=%2Fstaff">Clinic staff intake</a>
+      <a href="/patient/login">Patient portal</a>
+    </div>
 
     <div class="auth-security-footnote">
       <div class="security-badges-row">
@@ -55,3 +136,20 @@
     </div>
   </div>
 </section>
+
+<script nonce="<%= cspNonce %>">
+  document.querySelectorAll('.js-toggle-pwd').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetSelector = btn.getAttribute('data-target');
+      const input = document.querySelector(targetSelector);
+      if (!input) return;
+      if (input.type === 'password') {
+        input.type = 'text';
+        btn.textContent = 'Hide';
+      } else {
+        input.type = 'password';
+        btn.textContent = 'Show';
+      }
+    });
+  });
+</script>

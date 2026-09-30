@@ -8,9 +8,29 @@
     }
     if (value === null || value === undefined || value === '') return fallback;
     if (typeof value === 'object') {
-      try { return JSON.stringify(value); } catch (_) { return fallback; }
+      try {
+        const s = JSON.stringify(value);
+        if (s === '{}' || s === '[]' || s === '{"value":null}') return fallback;
+        return s;
+      } catch (_) { return fallback; }
     }
-    return String(value);
+    const str = String(value).trim();
+    if (
+      !str ||
+      str === '{}' ||
+      str === '[]' ||
+      str === '{ }' ||
+      str.toLowerCase() === 'null' ||
+      str.toLowerCase() === 'undefined' ||
+      str.toLowerCase() === 'not detected' ||
+      str.toLowerCase() === 'not available' ||
+      str.toLowerCase() === 'n/a' ||
+      str.toLowerCase() === 'none' ||
+      str.toLowerCase() === '[object object]'
+    ) {
+      return fallback;
+    }
+    return str;
   };
   const sourceBoundingBoxJson = (source) => {
     const box = source?.boundingBox;
@@ -90,6 +110,11 @@
       </div>
 
       <div class="header-action-buttons">
+        <% if (patient?._id) { %>
+          <a href="/patients/<%= patient._id %>" class="btn btn-outline btn-sm">
+            <span>View Patient History ↗</span>
+          </a>
+        <% } %>
         <% if (isVerified) { %>
           <a href="/records/<%= document._id %>" class="btn btn-outline btn-sm">
             <span>View Sealed Record ↗</span>
@@ -170,15 +195,34 @@
     <!-- ========================================================= -->
     <!-- COLUMN 2: AI Extracted Structured Data (All 7 Sections) -->
     <!-- ========================================================= -->
-    <section class="workspace-zone zone-extracted" aria-label="AI Extracted Structured Data">
+    <section class="workspace-zone zone-extracted" aria-label="AI Review and Extracted Structured Data">
       <div class="zone-header">
         <div class="zone-title-group">
-          <h2 class="zone-title">AI Extracted Data</h2>
+          <h2 class="zone-title">AI Review</h2>
         </div>
-        <span class="status-text-muted">Click any field to inspect source &amp; verify</span>
+        <span class="status-text-muted">Exceptions first · evidence on demand</span>
       </div>
 
       <div class="zone-content-scrollable">
+        <!-- Exception-based verification: high-confidence fields stay available,
+             but the default review queue contains only attention signals. -->
+        <div class="exception-review-summary" id="exceptionReviewSummary" aria-live="polite">
+          <div class="exception-review-summary-copy">
+            <span class="exception-review-kicker">AI Processing Complete</span>
+            <strong id="exceptionReviewHeading">AI Review — <span id="exceptionAttentionCount">0</span> Items Need Attention</strong>
+            <div class="exception-review-metrics" aria-label="AI review metrics">
+              <span><b id="exceptionTotalCount">0</b> fields processed</span>
+              <span><b id="exceptionProcessedCount">0</b> automatically validated</span>
+              <span class="exception-review-metric-attention"><b id="exceptionAttentionCountSecondary">0</b> require your attention</span>
+              <span><b id="exceptionDoctorReviewedCount">0</b> doctor reviewed</span>
+            </div>
+            <p id="exceptionReviewStatus">High-confidence fields are available below without manual approval.</p>
+          </div>
+          <div class="exception-review-actions">
+            <button type="button" class="btn btn-primary btn-sm is-active" id="btnReviewAttentionOnly">Review Exceptions</button>
+            <button type="button" class="btn btn-outline btn-sm" id="btnReviewAllFields">Show all fields</button>
+          </div>
+        </div>
         
         <!-- Clinical Flags Banner (if any) -->
         <% if (flags.totalAlerts > 0) { %>
@@ -258,7 +302,7 @@
               <div class="candidate-suggestion-card">
                 <div class="candidate-header-row">
                   <div class="candidate-headline">
-                    <span class="badge badge-amber">Suggested Match</span>
+                    <span class="badge <%= topCandidate.matchConfidence === 'HIGH' ? 'badge-success' : 'badge-amber' %>"><%= topCandidate.matchConfidence === 'HIGH' ? 'High-confidence candidate' : 'Doctor confirmation required' %></span>
                     <strong><%= topCandidate.fullName %></strong>
                     <span class="mrn-text">(MRN: <%= topCandidate.mrn %>)</span>
                   </div>
@@ -269,6 +313,7 @@
                     <span class="reason-tag">✓ <%= reason %></span>
                   <% }) %>
                 </div>
+                <p class="match-safety-note">Patient matching uses MRN and/or phone evidence. Name alone is never used to attach a clinical record.</p>
                 <div class="candidate-actions-row">
                   <form method="post" action="/documents/<%= document._id %>/match" class="inline-match-form">
                     <input type="hidden" name="patientId" value="<%= topCandidate._id %>">
@@ -276,6 +321,9 @@
                   </form>
                 </div>
               </div>
+            <% } %>
+            <% if (!patient?._id && !candidateList.length && displayValue(extPatient.name) && !displayValue(extPatient.mrn) && !displayValue(extPatient.phone)) { %>
+              <p class="match-safety-note match-safety-note--blocked">Only a patient name was extracted. For safety, the system will not attach this record automatically; select the chart manually or create a new patient after checking the source.</p>
             <% } %>
 
             <div class="match-alternative-actions">
@@ -351,7 +399,7 @@
                 <span class="status-indicator-pill <%= pName.status === 'review_required' ? 'status-review' : 'status-ok' %>">
                   <%= pName.status === 'review_required' ? '⚠ Review Required' : 'AI extracted' %>
                 </span>
-                <span class="link-indicator">🔍 Source Region</span>
+                <span class="link-indicator">🔍 View Evidence</span>
               </div>
             </div>
 
@@ -379,11 +427,15 @@
               <div class="entity-main-row">
                 <span class="field-label-text">MRN:</span>
                 <strong class="entity-primary-name"><%= pMrnValue || 'Not detected' %></strong>
-                <span class="confidence-chip <%= pMrnScore >= 80 ? 'chip-high' : 'chip-warning' %>"><%= pMrnScore %>%</span>
+                <% if (pMrnValue && pMrnScore > 0) { %>
+                  <span class="confidence-chip <%= pMrnScore >= 80 ? 'chip-high' : 'chip-warning' %>"><%= pMrnScore %>%</span>
+                <% } %>
               </div>
               <div class="entity-source-footer">
-                <span class="status-indicator-pill status-ok">AI extracted</span>
-                <span class="link-indicator">🔍 Source Region</span>
+                <span class="status-indicator-pill <%= !pMrnValue ? 'status-review' : (pMrn.status === 'review_required' ? 'status-review' : 'status-ok') %>">
+                  <%= !pMrnValue ? 'Not detected' : (pMrn.status === 'review_required' ? '⚠ Review Required' : 'AI extracted') %>
+                </span>
+                <span class="link-indicator">🔍 View Evidence</span>
               </div>
             </div>
 
@@ -412,7 +464,9 @@
                 <div class="entity-main-row">
                   <span class="field-label-text">Age:</span>
                   <strong class="entity-primary-name"><%= pAgeValue ? `${pAgeValue} yrs` : 'Not detected' %></strong>
-                  <span class="confidence-chip chip-high"><%= pAgeScore %>%</span>
+                  <% if (pAgeValue && pAgeScore > 0) { %>
+                    <span class="confidence-chip <%= pAgeScore >= 80 ? 'chip-high' : 'chip-warning' %>"><%= pAgeScore %>%</span>
+                  <% } %>
                 </div>
               </div>
 
@@ -439,7 +493,9 @@
                 <div class="entity-main-row">
                   <span class="field-label-text">Gender:</span>
                   <strong class="entity-primary-name"><%= pGenValue || 'Not detected' %></strong>
-                  <span class="confidence-chip chip-high"><%= pGenScore %>%</span>
+                  <% if (pGenValue && pGenScore > 0) { %>
+                    <span class="confidence-chip <%= pGenScore >= 80 ? 'chip-high' : 'chip-warning' %>"><%= pGenScore %>%</span>
+                  <% } %>
                 </div>
               </div>
             </div>
@@ -468,7 +524,9 @@
               <div class="entity-main-row">
                 <span class="field-label-text">Phone:</span>
                 <strong class="entity-primary-name"><%= pPhoneValue || 'Not detected' %></strong>
-                <span class="confidence-chip chip-high"><%= pPhoneScore %>%</span>
+                <% if (pPhoneValue && pPhoneScore > 0) { %>
+                  <span class="confidence-chip <%= pPhoneScore >= 80 ? 'chip-high' : 'chip-warning' %>"><%= pPhoneScore %>%</span>
+                <% } %>
               </div>
             </div>
           </div>
@@ -510,7 +568,9 @@
               <div class="entity-main-row">
                 <span class="field-label-text">Date:</span>
                 <strong class="entity-primary-name"><%= encDateValue || 'Not detected' %></strong>
-                <span class="confidence-chip chip-high"><%= encDateScore %>%</span>
+                <% if (encDateValue && encDateScore > 0) { %>
+                  <span class="confidence-chip <%= encDateScore >= 80 ? 'chip-high' : 'chip-warning' %>"><%= encDateScore %>%</span>
+                <% } %>
               </div>
             </div>
 
@@ -532,7 +592,9 @@
               <div class="entity-main-row">
                 <span class="field-label-text">Facility:</span>
                 <strong class="entity-primary-name"><%= encFacValue || 'Not detected' %></strong>
-                <span class="confidence-chip chip-high"><%= encFacScore %>%</span>
+                <% if (encFacValue && encFacScore > 0) { %>
+                  <span class="confidence-chip <%= encFacScore >= 80 ? 'chip-high' : 'chip-warning' %>"><%= encFacScore %>%</span>
+                <% } %>
               </div>
             </div>
           </div>
@@ -578,7 +640,7 @@
                   </div>
                   <div class="entity-source-footer">
                     <span class="status-indicator-pill status-ok">AI extracted</span>
-                    <span class="link-indicator">🔍 Source Region</span>
+                    <span class="link-indicator">🔍 View Evidence</span>
                   </div>
                 </div>
               <% }) %>
@@ -791,7 +853,7 @@
                     <span class="confidence-chip chip-high"><%= obsScore %>%</span>
                   </div>
                   <div class="entity-source-footer">
-                    <span class="link-indicator">🔍 Source Region</span>
+                    <span class="link-indicator">🔍 View Evidence</span>
                   </div>
                 </div>
               <% }) %>
@@ -881,7 +943,7 @@
     <section class="workspace-zone zone-inspector" aria-label="Clinical Verification and Sign-off">
       <div class="zone-header">
         <div class="zone-title-group">
-          <h2 class="zone-title">Clinical Verification</h2>
+          <h2 class="zone-title">Exception Review &amp; Sign-off</h2>
         </div>
         <span class="review-duty-tag">Human in the loop</span>
       </div>
@@ -908,7 +970,7 @@
               <div class="snippet-header-row">
                 <span class="snippet-label">Handwritten / Source Snippet:</span>
                 <button type="button" class="btn-snippet-focus" id="btnFocusSourceImage" title="Focus image on this snippet">
-                  <span>🔍 View on Image</span>
+                  <span>🔍 View Evidence on Source</span>
                 </button>
               </div>
               <div class="snippet-preview-box" id="snippetPreviewBox">
@@ -973,27 +1035,33 @@
             <% } %>
           </div>
 
-          <!-- MANDATORY PRE-APPROVAL VALIDATION CHECKLIST -->
-          <div class="editor-subpanel validation-checklist-box">
-            <h3 class="panel-subheading">Mandatory Pre-Approval Validation</h3>
-            <p class="checklist-desc">Confirm clinical safety requirements before approving &amp; locking into EHR.</p>
-
-            <div class="checklist-items">
-              <label class="check-item">
-                <input type="checkbox" id="chkIdentity" name="identityConfirmed" value="yes" class="check-input" <%= isVerified ? 'checked disabled' : 'required' %>>
-                <span class="check-text">Patient identity and MRN confirmed against original document</span>
-              </label>
-
-              <label class="check-item">
-                <input type="checkbox" id="chkDosage" name="dosageConfirmed" value="yes" class="check-input" <%= isVerified ? 'checked disabled' : 'required' %>>
-                <span class="check-text">Prescription dosages and instructions verified against original ink</span>
-              </label>
-
-              <label class="check-item">
-                <input type="checkbox" id="chkFlags" name="flagsConfirmed" value="yes" class="check-input" <%= isVerified ? 'checked disabled' : 'required' %>>
-                <span class="check-text">Clinical flags and drug interactions reviewed</span>
-              </label>
+          <!-- SYSTEM CHECKS: completed automatically; only exceptions need doctor attention. -->
+          <div class="editor-subpanel system-checks-panel">
+            <div class="system-checks-heading">
+              <div>
+                <span class="exception-review-kicker">System checks</span>
+                <h3 class="panel-subheading">Automated review status</h3>
+              </div>
+              <span class="system-checks-badge">Auto-checked</span>
             </div>
+            <div class="system-check-list">
+              <div class="system-check-item" id="systemCheckPatient"><span class="system-check-icon">✓</span><span>Patient matched</span></div>
+              <div class="system-check-item" id="systemCheckFields"><span class="system-check-icon">✓</span><span>Required fields checked</span></div>
+              <div class="system-check-item" id="systemCheckExtraction"><span class="system-check-icon">✓</span><span>Extraction validated</span></div>
+              <div class="system-check-item" id="systemCheckEvidence"><span class="system-check-icon">✓</span><span>Source evidence available</span></div>
+              <div class="system-check-item" id="systemCheckUnresolved"><span class="system-check-icon">✓</span><span>No unresolved extraction errors</span></div>
+            </div>
+          </div>
+
+          <!-- DOCTOR CONFIRMATION: one attestation after the exception queue is clear. -->
+          <div class="editor-subpanel exception-doctor-confirmation">
+            <span class="exception-review-kicker">Doctor confirmation</span>
+            <h3 class="panel-subheading">Review only the highlighted exceptions</h3>
+            <p class="checklist-desc" id="exceptionRemainingMessage">Resolve the attention items in the AI Review panel before signing.</p>
+            <label class="check-item">
+              <input type="checkbox" id="chkExceptionsReviewed" name="exceptionsReviewed" value="yes" class="check-input" <%= isVerified ? 'checked disabled' : 'required' %>>
+              <span class="check-text">I have reviewed the highlighted exceptions.</span>
+            </label>
           </div>
 
           <!-- PHYSICIAN REMARKS & SIGNING ATTESTATION -->
@@ -1029,9 +1097,10 @@
                 <button type="button" class="btn btn-outline btn-save-draft" id="btnSaveDraftZone3">
                   <span>Save Draft</span>
                 </button>
-                <button type="submit" class="btn btn-primary btn-approve-final" id="btnApproveFinal">
-                  <span>✓</span><span>Approve &amp; Lock Record</span>
+                <button type="submit" class="btn btn-primary btn-approve-final" id="btnApproveFinal" disabled>
+                  <span>✓</span><span>Approve &amp; Save Clinical Record</span>
                 </button>
+                <p class="approval-readiness-message" id="approvalReadinessMessage" aria-live="polite">Exceptions must be resolved before approval.</p>
               <% } else { %>
                 <div class="locked-banner">
                   <span class="lock-icon">🔒</span>
@@ -1052,15 +1121,15 @@
 </div>
 
 <!-- Initial JSON data for client-side syncing -->
-<script>
+<script nonce="<%= cspNonce %>">
   window.clinicalWorkspaceData = {
     docId: "<%= document._id %>",
     patientId: "<%= patient._id || '' %>",
     isVerified: <%= isVerified %>,
-    structuredData: <%- JSON.stringify(structured).replace(/</g, '\\u003c') %>,
-    medications: <%- JSON.stringify(extMedications).replace(/</g, '\\u003c') %>,
-    labs: <%- JSON.stringify(extInvestigations).replace(/</g, '\\u003c') %>,
-    fieldStates: <%- JSON.stringify(draft?.fieldStates || {}).replace(/</g, '\\u003c') %>,
+    structuredData: <%- safeJsonForScript(structured) %>,
+    medications: <%- safeJsonForScript(extMedications) %>,
+    labs: <%- safeJsonForScript(extInvestigations) %>,
+    fieldStates: <%- safeJsonForScript(draft?.fieldStates || {}) %>,
     defaultDoctor: "<%= clinicianName %>"
   };
 </script>

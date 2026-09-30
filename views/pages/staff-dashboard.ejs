@@ -1,0 +1,83 @@
+<% layout('/layouts/boilerplate') -%>
+
+<div class="upload-page-container staff-dashboard-page">
+  <header class="page-title-block staff-dashboard-header">
+    <div class="title-breadcrumbs"><span class="current">Operations / Staff intake</span></div>
+    <div class="staff-heading-row">
+      <div>
+        <h1 class="page-heading">Clinical intake queue</h1>
+        <p class="page-lead">Upload incoming records once. DEUS processes them in the background and routes only exceptions to a doctor.</p>
+      </div>
+      <span class="staff-role-badge">Signed in as <%= staffName %></span>
+    </div>
+  </header>
+
+  <section class="upload-workspace-card staff-upload-card" aria-labelledby="staffUploadTitle">
+    <div class="staff-section-heading">
+      <div><span class="exception-review-kicker">UNIFIED INGESTION</span><h2 id="staffUploadTitle">Scan or upload a clinical document</h2></div>
+      <span class="staff-processing-chip">Background processing</span>
+    </div>
+    <form action="/staff/documents" method="post" enctype="multipart/form-data" class="staff-upload-form">
+      <div class="staff-form-grid">
+        <div class="auth-field">
+          <label class="auth-label" for="staffPatient">Known patient <span class="text-muted">(optional)</span></label>
+          <select class="form-select" id="staffPatient" name="patientId">
+            <option value="">Leave unassigned — match after extraction</option>
+            <% (patients || []).forEach((patient) => { %>
+              <option value="<%= patient._id %>"><%= patient.fullName %> · <%= patient.mrn %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div class="auth-field">
+          <label class="auth-label" for="staffDocumentType">Document type</label>
+          <select class="form-select" id="staffDocumentType" name="documentType">
+            <option value="PRESCRIPTION">Prescription</option>
+            <option value="OPD_CARD">OPD card</option>
+            <option value="LAB_REPORT">Lab report</option>
+            <option value="DISCHARGE_SUMMARY">Discharge summary</option>
+            <option value="OTHER">Other</option>
+          </select>
+        </div>
+      </div>
+      <label class="staff-file-picker" for="staffFileInput"><span class="staff-file-picker-icon">↑</span><strong>Choose scanned record</strong><span>PDF, PNG, JPG, WEBP · up to 15 MB</span><input id="staffFileInput" name="file" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/png,image/jpeg,image/webp" required></label>
+      <div class="upload-submit-row"><span class="staff-upload-note">The original file stays private and is retained as source evidence.</span><button type="submit" class="btn btn-primary">Send to intake queue →</button></div>
+    </form>
+  </section>
+
+  <section class="staff-status-panel" aria-labelledby="staffQueueTitle">
+    <div class="staff-section-heading"><div><span class="exception-review-kicker">LIVE STATUS</span><h2 id="staffQueueTitle">Recent intake</h2></div><span class="text-muted"><%= (documents || []).length %> recent records</span></div>
+    <% if (!(documents || []).length) { %>
+      <div class="staff-empty-state">No staff-uploaded documents yet.</div>
+    <% } else { %>
+      <div class="staff-status-list">
+        <% documents.forEach((document) => { %>
+          <article class="staff-status-row" data-staff-document-id="<%= document._id %>" data-status-url="/staff/documents/<%= document._id %>/status">
+            <div class="staff-status-main"><strong><%= document.originalFilename %></strong><span><%= document.patient?.fullName || 'Patient match pending' %> · <%= document.patient?.mrn || 'No MRN assigned' %></span></div>
+            <div class="staff-status-meta"><span class="staff-status-pill staff-status-<%= String(document.processingStatus || document.status || '').toLowerCase().replaceAll('_', '-') %>" data-processing-status><%= document.processingStatus || document.status %></span><span data-processing-detail><%= document.processingError || formatDate(document.createdAt, true) %></span></div>
+            <% if (document.processingStatus === 'PATIENT_MATCH_REQUIRED') { %><a class="btn btn-outline btn-sm" href="/documents/<%= document._id %>/match">Confirm patient</a><% } %>
+          </article>
+        <% }) %>
+      </div>
+    <% } %>
+  </section>
+</div>
+
+  <script nonce="<%= cspNonce %>">
+  document.querySelectorAll('[data-status-url]').forEach((row) => {
+    const status = row.querySelector('[data-processing-status]');
+    const detail = row.querySelector('[data-processing-detail]');
+    const refresh = async () => {
+      try {
+        const response = await fetch(row.dataset.statusUrl, { headers: { Accept: 'application/json' } });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (status && data.processingStatus) {
+          status.textContent = data.processingStatus;
+          status.className = `staff-status-pill staff-status-${String(data.processingStatus).toLowerCase().replaceAll('_', '-')}`;
+        }
+        if (detail && data.processingError) detail.textContent = data.processingError;
+      } catch (_) { /* keep the last known status visible */ }
+    };
+    if (row.dataset.statusUrl) setInterval(refresh, 5000);
+  });
+</script>

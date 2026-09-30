@@ -2,8 +2,25 @@
 
 <% 
   const verifiedRecords = (medicalRecords || []).filter((record) => record.doctorVerified);
-  const prescriptions = verifiedRecords.flatMap((record) => (record.extractedData?.medications || []).map((medication) => ({ ...medication, source: record.title, date: record.createdAt, version: record.version })));
+  const prescriptions = verifiedRecords.flatMap((record) => (record.extractedData?.medications || []).map((medication) => ({ ...medication, source: record.title, date: record.createdAt, version: record.version, recordId: record._id, documentId: record.document?._id || record.document || '' })));
   const docs = documents || [];
+  const intelligence = historyIntelligence || {};
+  const intelligenceList = (value) => Array.isArray(value) && value.length ? value : ['Not documented in available records.'];
+  const intelligenceTimeline = Array.isArray(intelligence.timeline) ? intelligence.timeline : [];
+  const recentHistory = Array.isArray(intelligence.recentHistory) ? intelligence.recentHistory : [];
+  const latestHistory = recentHistory[0] || null;
+  const changesSincePreviousVisit = intelligenceList(intelligence.changesSincePreviousVisit);
+  const investigationHistory = intelligence.investigationHistory || {};
+  const medicationHistory = intelligence.medicationHistory || {};
+  const medicationTimeline = Array.isArray(medicationHistory.medicationTimeline) ? medicationHistory.medicationTimeline : [];
+  const visitComparisons = Array.isArray(intelligence.visitComparisons) ? intelligence.visitComparisons : [];
+  const latestComparison = visitComparisons[visitComparisons.length - 1] || null;
+  const sourceEvidence = Array.isArray(intelligence.sourceEvidence) ? intelligence.sourceEvidence : [];
+  const documentedSignals = [
+    ...changesSincePreviousVisit.filter((item) => item !== 'Not documented in available records.').map((item) => ({ label: 'Documented change', text: item })),
+    ...intelligenceList(investigationHistory.importantResults).filter((item) => item !== 'Not documented in available records.').map((item) => ({ label: 'Documented result', text: item })),
+    ...intelligenceList(medicationHistory.dosageChanges).filter((item) => item !== 'Not documented in available records.').map((item) => ({ label: 'Medication detail', text: item })),
+  ].slice(0, 4);
 %>
 
 <div class="patient-profile-container" data-patient-id="<%= patient._id %>">
@@ -42,6 +59,9 @@
         <span class="btn-icon">+</span>
         <span>Add Document</span>
       </a>
+      <% if (currentUser?.role === 'DOCTOR' || currentUser?.role === 'ADMIN') { %>
+        <a href="/patients/<%= patient._id %>/handoff/new" class="btn btn-outline">Generate Clinical Handoff</a>
+      <% } %>
     </div>
   </header>
 
@@ -90,12 +110,187 @@
     <!-- TAB 1: OVERVIEW -->
     <!-- ========================================== -->
     <div class="tab-panel is-active" id="tab-overview" role="tabpanel">
+      <!-- Patient History Intelligence: generated only from sealed records -->
+      <section class="panel-section-card patient-history-intelligence" aria-labelledby="patientHistoryIntelligenceTitle">
+        <div class="patient-history-intelligence-header">
+          <div>
+            <div class="patient-history-eyebrow"><span class="patient-history-status-dot"></span> Source-grounded clinical synthesis</div>
+            <h2 class="card-heading" id="patientHistoryIntelligenceTitle">Patient History Intelligence</h2>
+            <p class="card-sub">A concise longitudinal view generated from all <%= intelligence.sourceRecordCount || 0 %> clinician-approved record<%= intelligence.sourceRecordCount === 1 ? '' : 's' %>. Unverified drafts are excluded.</p>
+          </div>
+          <div class="patient-history-generated-meta">
+            <span class="badge badge-success">Documentation aid</span>
+            <small>Updated <%= intelligence.generatedAt ? formatDate(intelligence.generatedAt, true) : 'Not recorded' %></small>
+          </div>
+        </div>
+
+        <div class="patient-history-glance">
+          <span class="patient-history-glance-icon">✦</span>
+          <div>
+            <span class="patient-history-section-label">At a glance · review first</span>
+            <p><%= intelligence.atAGlance || 'Not documented in available records.' %></p>
+          </div>
+        </div>
+
+        <% if (sourceEvidence.length) { %>
+          <div class="patient-history-evidence-row" aria-label="Summary source evidence">
+            <span class="patient-history-evidence-label">Evidence</span>
+            <% sourceEvidence.slice(0, 3).forEach((evidence) => { %>
+              <a href="<%= evidence.recordUrl || evidence.documentUrl || '#' %>" class="patient-history-evidence-link">
+                <span>↗</span><%= evidence.dateLabel %> · <%= evidence.title %>
+              </a>
+            <% }) %>
+            <% if (sourceEvidence.length > 3) { %><span class="patient-history-evidence-more">+<%= sourceEvidence.length - 3 %> more signed source<%= sourceEvidence.length - 3 === 1 ? '' : 's' %></span><% } %>
+          </div>
+        <% } %>
+
+        <div class="patient-history-priority-grid" aria-label="Clinician briefing">
+          <article class="patient-history-priority-card is-current">
+            <div class="patient-history-priority-card-topline">
+              <span class="patient-history-section-label">Latest documented visit</span>
+              <% if (latestHistory?.current) { %><span class="patient-history-priority-badge">Current</span><% } %>
+            </div>
+            <strong class="patient-history-priority-date"><%= latestHistory?.dateLabel || 'Not documented in available records.' %></strong>
+            <h3><%= latestHistory?.title || 'No verified visit available' %></h3>
+            <p><strong>Diagnosis:</strong> <%= latestHistory ? (latestHistory.diagnosis || []).slice(0, 3).join(' · ') : 'Not documented in available records.' %></p>
+            <p><strong>Medication:</strong> <%= latestHistory ? (latestHistory.medications || []).slice(0, 3).join(' · ') : 'Not documented in available records.' %></p>
+            <% if (latestHistory?.evidence?.recordUrl) { %><a class="patient-history-source-link" href="<%= latestHistory.evidence.recordUrl %>">View source visit →</a><% } %>
+          </article>
+
+          <article class="patient-history-priority-card">
+            <div class="patient-history-priority-card-topline">
+              <span class="patient-history-section-label">Changes to review</span>
+              <span class="patient-history-priority-icon">↕</span>
+            </div>
+            <% if (changesSincePreviousVisit[0] === 'Not documented in available records.') { %>
+              <p class="patient-history-priority-empty">Not documented in available records.</p>
+            <% } else { %>
+              <ul class="patient-history-priority-list">
+                <% changesSincePreviousVisit.slice(0, 3).forEach((item) => { %><li><%= item %></li><% }) %>
+              </ul>
+            <% } %>
+          </article>
+
+          <article class="patient-history-priority-card">
+            <div class="patient-history-priority-card-topline">
+              <span class="patient-history-section-label">Documented signals</span>
+              <span class="patient-history-priority-icon">!</span>
+            </div>
+            <% if (!documentedSignals.length) { %>
+              <p class="patient-history-priority-empty">Not documented in available records.</p>
+            <% } else { %>
+              <ul class="patient-history-priority-list">
+                <% documentedSignals.slice(0, 3).forEach((signal) => { %><li><span><%= signal.label %></span><%= signal.text %></li><% }) %>
+              </ul>
+            <% } %>
+          </article>
+        </div>
+
+        <div class="patient-history-priority-actions">
+          <button type="button" class="btn btn-primary btn-sm patient-history-open-tab" data-tab-target="tab-prescriptions">Review medication history →</button>
+          <button type="button" class="btn btn-outline btn-sm patient-history-open-tab" data-tab-target="tab-records">Open full timeline →</button>
+          <span>Briefing is source-grounded; confirm decisions against signed records.</span>
+        </div>
+
+        <div class="patient-history-overview-grid">
+          <% const overview = intelligence.overview || {}; %>
+          <div><span>Patient</span><strong><%= overview.patientName || patient.fullName || 'Not documented in available records.' %></strong></div>
+          <div><span>Patient ID / MRN</span><strong><%= overview.patientId || 'Not documented in available records.' %></strong></div>
+          <div><span>Age / Gender</span><strong><%= overview.age || 'Not documented in available records.' %> · <%= overview.gender || 'Not documented in available records.' %></strong></div>
+          <div><span>Recorded visits</span><strong><%= overview.totalVisits || 0 %></strong></div>
+          <div><span>First recorded visit</span><strong><%= overview.firstRecordedVisit || 'Not documented in available records.' %></strong></div>
+          <div><span>Most recent visit</span><strong><%= overview.mostRecentVisit || 'Not documented in available records.' %></strong></div>
+        </div>
+
+        <details class="patient-history-full-synthesis">
+          <summary>
+            <span><strong>Full longitudinal breakdown</strong><small>Diagnoses, medication history, investigations, changes and recent visits</small></span>
+            <span class="patient-history-expand-label">Expand details <b>＋</b></span>
+          </summary>
+          <div class="patient-history-full-synthesis-body">
+        <div class="patient-history-detail-grid">
+          <% const clinicalHistory = intelligence.clinicalHistory || {}; %>
+          <article class="patient-history-detail-card">
+            <h3>Clinical history</h3>
+            <div class="patient-history-detail-group"><span>Diagnoses / conditions</span><p><%= intelligenceList(clinicalHistory.diagnoses).join(' · ') %></p></div>
+            <div class="patient-history-detail-group"><span>Recurring complaints</span><p><%= intelligenceList(clinicalHistory.recurringComplaints).join(' · ') %></p></div>
+            <div class="patient-history-detail-group"><span>Symptoms & observations</span><p><%= intelligenceList(clinicalHistory.symptomsObservations).join(' · ') %></p></div>
+            <div class="patient-history-detail-group"><span>Documented investigations</span><p><%= intelligenceList(clinicalHistory.investigations).join(' · ') %></p></div>
+            <div class="patient-history-detail-group"><span>Documented results / notes</span><p><%= intelligenceList(clinicalHistory.documentedResults).join(' · ') %></p></div>
+          </article>
+
+          <article class="patient-history-detail-card">
+            <h3>Medication history</h3>
+            <div class="patient-history-detail-group"><span>Previously prescribed</span><p><%= intelligenceList(medicationHistory.previouslyPrescribed).join(' · ') %></p></div>
+            <div class="patient-history-detail-group"><span>Currently documented</span><p><%= intelligenceList(medicationHistory.currentlyDocumented).join(' · ') %></p></div>
+            <div class="patient-history-detail-group"><span>Added</span><p><%= intelligenceList(medicationHistory.added).join(' · ') %></p></div>
+            <div class="patient-history-detail-group"><span>Discontinued / dosage changes</span><p><%= intelligenceList([...(medicationHistory.discontinued || []), ...(medicationHistory.dosageChanges || [])]).join(' · ') %></p></div>
+            <% if (medicationTimeline.length) { %>
+              <div class="medication-history-timeline-list">
+                <span class="patient-history-detail-group-label">Medication timeline</span>
+                <% medicationTimeline.forEach((medication) => { %>
+                  <div class="medication-history-timeline-row">
+                    <strong><%= medication.name %></strong>
+                    <span><%= medication.status %> · First documented: <%= medication.firstDocumented %> · Last documented: <%= medication.lastDocumented %></span>
+                    <% if (medication.evidence?.[medication.evidence.length - 1]?.recordUrl) { %><a class="patient-history-source-link" href="<%= medication.evidence[medication.evidence.length - 1].recordUrl %>">View source →</a><% } %>
+                  </div>
+                <% }) %>
+              </div>
+            <% } %>
+          </article>
+
+          <article class="patient-history-detail-card">
+            <h3>Investigation history</h3>
+            <div class="patient-history-detail-group"><span>Previous investigations</span><p><%= intelligenceList(investigationHistory.previousInvestigations).join(' · ') %></p></div>
+            <div class="patient-history-detail-group"><span>Repeated investigations</span><p><%= intelligenceList(investigationHistory.repeatedInvestigations).join(' · ') %></p></div>
+            <div class="patient-history-detail-group"><span>Important documented results</span><p><%= intelligenceList(investigationHistory.importantResults).join(' · ') %></p></div>
+            <div class="patient-history-detail-group"><span>New investigations</span><p><%= intelligenceList(investigationHistory.newInvestigations).join(' · ') %></p></div>
+          </article>
+
+          <article class="patient-history-detail-card">
+            <h3>Changes over time</h3>
+            <div class="patient-history-detail-group"><span>Since previous visit</span><p><%= intelligenceList(intelligence.changesSincePreviousVisit).join(' · ') %></p></div>
+            <div class="patient-history-detail-group"><span>All documented changes</span><p><%= intelligenceList(intelligence.changesOverTime).join(' · ') %></p></div>
+          </article>
+        </div>
+
+        <div class="patient-history-recent">
+          <div class="patient-history-recent-heading">
+            <div>
+              <span class="patient-history-section-label">Recent history</span>
+              <h3>Latest documented visits</h3>
+            </div>
+            <button type="button" class="card-action-link patient-history-open-timeline" data-tab-target="tab-records">Open full timeline →</button>
+          </div>
+          <% if (!recentHistory.length) { %>
+            <p class="patient-history-recent-empty">Not documented in available records.</p>
+          <% } else { %>
+            <div class="patient-history-recent-list">
+              <% recentHistory.forEach((event) => { %>
+                <div class="patient-history-recent-row">
+                  <time datetime="<%= event.date || '' %>"><%= event.dateLabel %></time>
+                  <div><strong><%= event.title %></strong><span><%= (event.diagnosis || []).join(' · ') %></span></div>
+                  <% if (event.current) { %><span class="version-badge version-original">Current</span><% } %>
+                </div>
+              <% }) %>
+            </div>
+          <% } %>
+        </div>
+          </div>
+        </details>
+
+        <div class="patient-history-disclaimer">
+          <span>ⓘ</span>
+          <p>This is a source-grounded documentation and information-retrieval aid. It does not create diagnoses, treatment recommendations, or facts absent from the stored records. Confirm decisions against the signed source records.</p>
+        </div>
+      </section>
+
       <!-- Active Prescriptions Summary -->
       <section class="panel-section-card">
         <div class="section-header-row">
           <div>
-            <h2 class="card-heading">Active Prescriptions & Regimen</h2>
-            <p class="card-sub">Verified medications extracted from clinical records</p>
+              <h2 class="card-heading">All Prescriptions Across Visits</h2>
+              <p class="card-sub">Every clinician-approved medication recorded in this patient's complete history</p>
           </div>
           <span class="badge badge-success"><%= prescriptions.length %> verified medications</span>
         </div>
@@ -123,7 +318,9 @@
                     <td><span class="dose-tag"><%= rx.dosage || '—' %></span></td>
                     <td><%= rx.frequency || '—' %></td>
                     <td class="text-muted"><%= rx.instructions || 'As directed' %></td>
-                    <td><span class="source-tag"><%= rx.source %></span></td>
+                    <td>
+                      <% if (rx.recordId) { %><a class="source-tag patient-history-source-link" href="/records/<%= rx.recordId %>"><%= rx.source %> ↗</a><% } else { %><span class="source-tag"><%= rx.source %></span><% } %>
+                    </td>
                   </tr>
                 <% }) %>
               <% } %>
@@ -170,8 +367,8 @@
       <section class="panel-section-card">
         <div class="section-header-row">
           <div>
-            <h2 class="card-heading">Verified Prescriptions</h2>
-            <p class="card-sub">Only clinician-approved medication entries are shown here.</p>
+              <h2 class="card-heading">All Verified Prescriptions</h2>
+              <p class="card-sub">Complete medication history across every clinician-approved visit.</p>
           </div>
           <span class="badge badge-success"><%= prescriptions.length %> entries</span>
         </div>
@@ -188,7 +385,10 @@
                     <td><%= rx.dosage || '—' %></td>
                     <td><%= rx.frequency || '—' %></td>
                     <td><%= rx.instructions || '—' %></td>
-                    <td><%= rx.source %> · <%= formatDate(rx.date) %></td>
+                    <td>
+                      <% if (rx.recordId) { %><a class="patient-history-source-link" href="/records/<%= rx.recordId %>"><%= rx.source %> ↗</a><% } else { %><span><%= rx.source %></span><% } %>
+                      · <%= formatDate(rx.date) %>
+                    </td>
                   </tr>
                 <% }) %>
               <% } %>
@@ -202,6 +402,105 @@
     <!-- TAB 3: MEDICAL HISTORY (TIMELINE & VERSIONS) -->
     <!-- ========================================== -->
     <div class="tab-panel" id="tab-records" role="tabpanel" style="display: none;">
+      <section class="panel-section-card patient-history-timeline-section">
+        <div class="section-header-row patient-history-timeline-header">
+          <div>
+            <div class="patient-history-eyebrow"><span class="patient-history-status-dot"></span> Recent history first</div>
+            <h2 class="card-heading">Longitudinal History Timeline</h2>
+            <p class="card-sub">Chronological view of every sealed visit, medication, investigation, and documented change.</p>
+          </div>
+          <span class="badge badge-success" id="patientHistoryFilterStatus"><%= intelligenceTimeline.length %> visits</span>
+        </div>
+
+        <div class="patient-history-filters" role="search" aria-label="Filter patient history">
+          <label>
+            <span>Search history</span>
+            <input type="search" id="patientHistorySearch" placeholder="Diagnosis, medication, investigation..." autocomplete="off">
+          </label>
+          <label>
+            <span>Filter by</span>
+            <select id="patientHistoryType">
+              <option value="all">All history</option>
+              <option value="medicine">Medicine</option>
+              <option value="diagnosis">Diagnosis / condition</option>
+              <option value="investigation">Investigation</option>
+              <option value="visit">Visit / document</option>
+            </select>
+          </label>
+          <label>
+            <span>From</span>
+            <input type="date" id="patientHistoryFrom">
+          </label>
+          <label>
+            <span>To</span>
+            <input type="date" id="patientHistoryTo">
+          </label>
+          <button type="button" class="btn btn-outline btn-sm" id="clearPatientHistoryFilters">Clear filters</button>
+        </div>
+
+        <% if (latestComparison) { %>
+          <div class="patient-history-comparison-card">
+            <div class="patient-history-comparison-heading">
+              <div>
+                <span class="patient-history-eyebrow"><span class="patient-history-status-dot"></span> Latest comparison</span>
+                <h3>Previous visit → Current visit</h3>
+              </div>
+              <span><%= latestComparison.previous.dateLabel %> → <%= latestComparison.current.dateLabel %></span>
+            </div>
+            <div class="patient-history-comparison-grid">
+              <div><span>Diagnosis / condition</span><strong><%= latestComparison.previous.diagnoses.join(' · ') %></strong><b>→</b><strong><%= latestComparison.current.diagnoses.join(' · ') %></strong></div>
+              <div><span>Medication</span><strong><%= latestComparison.previous.medications.join(' · ') %></strong><b>→</b><strong><%= latestComparison.current.medications.join(' · ') %></strong></div>
+              <div><span>Investigation</span><strong><%= latestComparison.previous.investigations.join(' · ') %></strong><b>→</b><strong><%= latestComparison.current.investigations.join(' · ') %></strong></div>
+            </div>
+            <% const comparisonSections = latestComparison.sections || {}; %>
+            <div class="patient-history-comparison-diff-grid">
+              <div><span>Medication changes</span><p><b>Added:</b> <%= (comparisonSections.medication?.added || ['Not documented in available records.']).join(' · ') %></p><p><b>Continued:</b> <%= (comparisonSections.medication?.continued || ['Not documented in available records.']).join(' · ') %></p><p><b>Changed:</b> <%= (comparisonSections.medication?.changed || ['Not documented in available records.']).join(' · ') %></p></div>
+              <div><span>Diagnosis changes</span><p><b>Added:</b> <%= (comparisonSections.diagnosis?.added || ['Not documented in available records.']).join(' · ') %></p><p><b>Continued:</b> <%= (comparisonSections.diagnosis?.continued || ['Not documented in available records.']).join(' · ') %></p><p><b>Not listed:</b> <%= (comparisonSections.diagnosis?.notListed || ['Not documented in available records.']).join(' · ') %></p></div>
+              <div><span>Investigation changes</span><p><b>Added:</b> <%= (comparisonSections.investigation?.added || ['Not documented in available records.']).join(' · ') %></p><p><b>Continued:</b> <%= (comparisonSections.investigation?.continued || ['Not documented in available records.']).join(' · ') %></p><p><b>Not listed:</b> <%= (comparisonSections.investigation?.notListed || ['Not documented in available records.']).join(' · ') %></p></div>
+            </div>
+            <div class="patient-history-comparison-evidence">
+              <% if (latestComparison.previous.evidence?.recordUrl) { %><a class="patient-history-source-link" href="<%= latestComparison.previous.evidence.recordUrl %>">Previous source: <%= latestComparison.previous.evidence.title %> ↗</a><% } %>
+              <% if (latestComparison.current.evidence?.recordUrl) { %><a class="patient-history-source-link" href="<%= latestComparison.current.evidence.recordUrl %>">Current source: <%= latestComparison.current.evidence.title %> ↗</a><% } %>
+            </div>
+            <ul class="patient-history-comparison-changes">
+              <% latestComparison.changes.slice(0, 4).forEach((change) => { %><li><%= change %></li><% }) %>
+            </ul>
+          </div>
+        <% } %>
+
+        <div class="patient-history-timeline" id="patientHistoryTimeline">
+          <% if (!intelligenceTimeline.length) { %>
+            <div class="empty-state-box"><span class="empty-icon">🗂</span><h3>No verified clinical history</h3><p>Upload and approve a clinical record to establish the patient's longitudinal history.</p></div>
+          <% } else { %>
+            <% intelligenceTimeline.forEach((event) => { %>
+              <article class="patient-history-timeline-item <%= event.current ? 'is-current' : '' %>" data-history-item data-date="<%= event.date ? event.date.slice(0, 10) : '' %>" data-search="<%= [event.title, event.recordType, ...(event.diagnosis || []), ...(event.medications || []), ...(event.investigations || []), ...(event.notes || [])].join(' ') %>" data-medicine="<%= (event.medications || []).join(' ') %>" data-diagnosis="<%= (event.diagnosis || []).join(' ') %>" data-investigation="<%= (event.investigations || []).join(' ') %>" data-visit="<%= [event.title, event.recordType].join(' ') %>">
+                <div class="patient-history-timeline-marker"><span><%= event.current ? '●' : '✓' %></span></div>
+                <div class="patient-history-timeline-body">
+                  <div class="patient-history-timeline-topline">
+                    <div>
+                      <span class="record-type-pill"><%= prettyType(event.recordType) %></span>
+                      <% if (event.current) { %><span class="version-badge version-original">Current visit</span><% } %>
+                      <h3><%= event.title %></h3>
+                    </div>
+                    <time datetime="<%= event.date || '' %>"><%= event.dateLabel %></time>
+                  </div>
+                  <div class="patient-history-timeline-facts">
+                    <div><span>Diagnosis / condition</span><strong><%= (event.diagnosis || []).join(' · ') %></strong></div>
+                    <div><span>Medication</span><strong><%= (event.medications || []).join(' · ') %></strong></div>
+                    <div><span>Investigation</span><strong><%= (event.investigations || []).join(' · ') %></strong></div>
+                  </div>
+                  <div class="patient-history-timeline-footer">
+                    <span>Visit <%= event.visitNumber %> of <%= intelligence.sourceRecordCount || intelligenceTimeline.length %></span>
+                    <% if (event.id && !String(event.id).startsWith('record-')) { %><a href="/records/<%= event.id %>" class="card-action-link">View signed record →</a><% } %>
+                  </div>
+                </div>
+              </article>
+            <% }) %>
+            <div class="patient-history-filter-empty" id="patientHistoryFilterEmpty" hidden>No visits match the selected history filters.</div>
+          <% } %>
+        </div>
+      </section>
+
       <section class="panel-section-card">
         <div class="section-header-row">
           <div>
@@ -384,9 +683,16 @@
         <div class="section-header-row">
           <div>
             <h2 class="card-heading">Patient Audit Events</h2>
-            <p class="card-sub">Access logs, verification timestamps, and amendment events for this patient</p>
+            <p class="card-sub">Original source, AI extraction, corrections, sign-off and amendment history are preserved.</p>
           </div>
           <a href="/audit?search=<%= encodeURIComponent(patient.fullName) %>" class="card-action-link">Open Full Audit Trail →</a>
+        </div>
+
+        <div class="audit-lifecycle-strip" aria-label="Clinical record audit lifecycle">
+          <span><b>01</b> Original document</span><i>→</i>
+          <span><b>02</b> AI extraction</span><i>→</i>
+          <span><b>03</b> Doctor correction</span><i>→</i>
+          <span><b>04</b> Final approval</span>
         </div>
 
         <div class="audit-events-list">

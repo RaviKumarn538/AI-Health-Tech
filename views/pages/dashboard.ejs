@@ -1,4 +1,5 @@
 <% layout('/layouts/boilerplate') -%>
+<% const dashboardAnalytics = (typeof analytics !== 'undefined' && analytics) || {}; %>
 
 <div class="dashboard-container">
   <!-- Top Greeting & Action Header -->
@@ -33,6 +34,42 @@
       <span class="stat-label">Needs review</span>
       <strong class="stat-value"><%= stats.needsReview %></strong>
       <span class="stat-meta">Awaiting clinician sign-off</span>
+    </div>
+  </section>
+
+  <section class="dashboard-analytics-panel" aria-labelledby="analyticsHeading">
+    <div class="card-header-row">
+      <div>
+        <h2 id="analyticsHeading" class="card-title">Clinical Operations Snapshot</h2>
+        <p class="card-subtitle">Access-scoped operational metrics from clinician-approved records.</p>
+      </div>
+      <span class="badge badge-success">Live clinic view</span>
+    </div>
+    <div class="analytics-metric-grid">
+      <div><span>Total visits</span><strong><%= dashboardAnalytics.totalVisits || 0 %></strong></div>
+      <div><span>Prescriptions processed</span><strong><%= dashboardAnalytics.prescriptionsProcessed || 0 %></strong></div>
+      <div><span>Records added today</span><strong><%= dashboardAnalytics.recordsAddedToday || 0 %></strong></div>
+      <div><span>Pending reviews</span><strong><%= dashboardAnalytics.pendingReviews || 0 %></strong></div>
+    </div>
+    <div class="doctor-exception-summary" aria-label="Exception workload">
+      <div><span>Today's workflow</span><strong><%= doctorMetrics?.documentsProcessed || 0 %> documents processed</strong></div>
+      <div><strong><%= doctorMetrics?.automaticallyValidated || 0 %></strong><span>automatically validated</span></div>
+      <div class="doctor-exception-summary-alert"><strong><%= doctorMetrics?.requireAttention || 0 %></strong><span>require your attention</span></div>
+      <% if ((doctorMetrics?.requireAttention || 0) > 0) { %><a class="btn btn-primary btn-sm" href="#pending-section">Review <%= doctorMetrics.requireAttention %> exception<%= doctorMetrics.requireAttention === 1 ? '' : 's' %> →</a><% } %>
+    </div>
+    <div class="analytics-breakdown-grid">
+      <div>
+        <span class="analytics-breakdown-label">Commonly documented medicines</span>
+        <% if (dashboardAnalytics.commonMedicines?.length) { %>
+          <ol><% dashboardAnalytics.commonMedicines.forEach((item) => { %><li><span><%= item.label %></span><b><%= item.count %></b></li><% }) %></ol>
+        <% } else { %><p class="analytics-empty">Not documented in available records.</p><% } %>
+      </div>
+      <div>
+        <span class="analytics-breakdown-label">Common diagnoses</span>
+        <% if (dashboardAnalytics.commonDiagnoses?.length) { %>
+          <ol><% dashboardAnalytics.commonDiagnoses.forEach((item) => { %><li><span><%= item.label %></span><b><%= item.count %></b></li><% }) %></ol>
+        <% } else { %><p class="analytics-empty">Not documented in available records.</p><% } %>
+      </div>
     </div>
   </section>
 
@@ -79,8 +116,8 @@
                   <span class="chip-dot"></span>
                   <%= item.reviewStatusText %>
                 </span>
-                <a href="/review/<%= item._id %>" class="btn btn-secondary btn-sm queue-review-btn">
-                  <span>Review</span>
+                <a href="<%= item.actionPath || `/review/${item._id}` %>" class="btn btn-secondary btn-sm queue-review-btn">
+                  <span><%= item.reviewStatusText === 'Patient match required' ? 'Confirm patient' : 'Review' %></span>
                   <span class="arrow-glyph">→</span>
                 </a>
               </div>

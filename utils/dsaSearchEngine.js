@@ -9,6 +9,21 @@
  * 6. LRU Cache — O(1) Hash Map + Doubly Linked List caching for instant repeat lookups
  */
 
+function searchDateLabel(value) {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return "";
+  const month = new Intl.DateTimeFormat("en-US", { month: "long" }).format(date);
+  const year = String(date.getFullYear());
+  return `${month} ${year} ${month.toLowerCase()} ${year}`;
+}
+
+function searchFieldText(value) {
+  if (value && typeof value === "object" && Object.prototype.hasOwnProperty.call(value, "value")) return searchFieldText(value.value);
+  if (Array.isArray(value)) return value.map(searchFieldText).filter(Boolean).join(" ");
+  if (value && typeof value === "object") return "";
+  return String(value || "").trim();
+}
+
 // ============================================================================
 // 1. LRU CACHE (Hash Map + Doubly Linked List)
 // ============================================================================
@@ -473,7 +488,7 @@ class ClinicalSearchEngine {
       subtitle: `MRN: ${p.mrn} · ${p.age || '—'}y, ${p.gender || 'N/A'} · Blood: ${p.bloodGroup || '—'}`,
       url: `/patients/${p._id}`,
       badge: 'Patient',
-      meta: { mrn: p.mrn, phone: p.phone, allergies: p.allergies },
+      meta: { mrn: p.mrn, phone: p.phone, age: p.age, gender: p.gender, allergies: p.allergies },
       createdAt: p.createdAt || new Date(),
     };
     this.entityStore.set(id, ref);
@@ -522,11 +537,12 @@ class ClinicalSearchEngine {
     const subEntityIds = new Set();
     this.subEntitiesByDoc.set(docKey, subEntityIds);
     const patientName = d.patient?.fullName || 'Assigned Patient';
+    const recordedDate = searchDateLabel(d.createdAt);
     const ref = {
       id,
       entityType: 'DOCUMENT',
       title: d.originalFilename,
-      subtitle: `${d.documentType} · Status: ${d.status} · Patient: ${patientName}`,
+      subtitle: `${d.documentType} · Status: ${d.status} · Patient: ${patientName} · Recorded: ${recordedDate || 'date not recorded'}`,
       url: `/review/${d._id}`,
       badge: 'Clinical Document',
       meta: {
@@ -547,6 +563,14 @@ class ClinicalSearchEngine {
     // Inverted index
     this.invertedIndex.add(id, ref, 'filename', d.originalFilename, 4.0);
     this.invertedIndex.add(id, ref, 'documentType', d.documentType, 3.5);
+    this.invertedIndex.add(id, ref, 'date', recordedDate, 2.5);
+    this.trie.insert(recordedDate, ref);
+
+    const diagnosisText = searchFieldText(d.extractedRecord?.structuredJson?.diagnosis || d.diagnosis);
+    if (diagnosisText) {
+      this.invertedIndex.add(id, ref, 'diagnosis', diagnosisText, 3.8);
+      this.trie.insert(diagnosisText, ref);
+    }
 
     // Index extracted medications
     if (Array.isArray(d.medications)) {
@@ -658,11 +682,12 @@ class ClinicalSearchEngine {
     if (!r || !r._id) return;
     const id = `rec_${r._id}`;
     const patientName = r.patient?.fullName || 'Verified Patient';
+    const recordedDate = searchDateLabel(r.createdAt);
     const ref = {
       id,
       entityType: 'RECORD',
       title: r.title,
-      subtitle: `v${r.version || 1} · Verified by ${r.verifiedByName || 'Attending Physician'} · ${patientName}`,
+      subtitle: `v${r.version || 1} · Verified by ${r.verifiedByName || 'Attending Physician'} · ${patientName} · Recorded: ${recordedDate || 'date not recorded'}`,
       url: `/records/${r._id}`,
       badge: 'Medical Record',
       meta: { version: r.version, verifiedBy: r.verifiedByName, clinicName: r.clinicName },
@@ -672,6 +697,13 @@ class ClinicalSearchEngine {
     this.trie.insert(r.title, ref);
     this.invertedIndex.add(id, ref, 'title', r.title, 5.0);
     this.invertedIndex.add(id, ref, 'recordType', r.recordType || '', 3.0);
+    this.invertedIndex.add(id, ref, 'date', recordedDate, 2.5);
+    this.trie.insert(recordedDate, ref);
+    const diagnosisText = searchFieldText(r.extractedData?.diagnosis);
+    if (diagnosisText) {
+      this.invertedIndex.add(id, ref, 'diagnosis', diagnosisText, 3.8);
+      this.trie.insert(diagnosisText, ref);
+    }
     if (r.verificationNotes) this.invertedIndex.add(id, ref, 'verificationNotes', r.verificationNotes, 2.5);
   }
 

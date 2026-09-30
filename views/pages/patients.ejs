@@ -25,6 +25,7 @@
             type="search" 
             name="search" 
             class="patients-search-input"
+            id="patientsInstantSearchInput"
             value="<%= search %>" 
             placeholder="Search patients by name or MRN..." 
             autocomplete="off"
@@ -44,6 +45,17 @@
       </a>
     </div>
   </header>
+
+  <section class="patients-instant-results" id="patientsInstantResults" aria-live="polite" hidden>
+    <div class="patients-instant-results-header">
+      <div>
+        <span class="patient-history-eyebrow"><span class="patient-history-status-dot"></span> Instant clinical retrieval</span>
+        <h2>Patient profile, summary and history</h2>
+      </div>
+      <span class="patients-instant-results-status" id="patientsInstantResultsStatus"></span>
+    </div>
+    <div class="patients-instant-results-grid" id="patientsInstantResultsGrid"></div>
+  </section>
 
   <!-- 2. Patient Directory Grid View -->
   <section class="patients-directory-section" aria-label="Patient Directory List">

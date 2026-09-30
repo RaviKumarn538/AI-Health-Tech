@@ -7,7 +7,7 @@
         <line x1="3" y1="18" x2="21" y2="18"></line>
       </svg>
     </button>
-    <a class="topbar-brand" href="/dashboard" aria-label="AI Clinical Records Workspace">
+    <a class="topbar-brand" href="<%= currentUser?.role === 'STAFF' ? '/staff' : currentUser?.role === 'PATIENT' ? '/patient' : '/dashboard' %>" aria-label="AI Clinical Records Workspace">
       <div class="brand-emblem">
         <span class="brand-pill-icon">✚</span>
       </div>
@@ -71,7 +71,7 @@
           </div>
           <div class="clinician-info">
             <strong class="clinician-name"><%= currentUser.name %></strong>
-            <small class="clinician-role"><%= currentUser.role === 'ADMIN' ? 'Administrator' : 'Attending Physician' %></small>
+            <small class="clinician-role"><%= currentUser.role === 'ADMIN' ? 'Administrator' : currentUser.role === 'STAFF' ? 'Clinic Staff' : currentUser.role === 'PATIENT' ? 'Patient Portal' : 'Attending Physician' %></small>
           </div>
           <svg class="chevron-svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="6 9 12 15 18 9"></polyline>
@@ -85,16 +85,18 @@
             </div>
           </div>
           <div class="profile-menu-divider"></div>
-          <a class="profile-menu-item" href="/dashboard">
+          <a class="profile-menu-item" href="<%= currentUser.role === 'STAFF' ? '/staff' : currentUser.role === 'PATIENT' ? '/patient' : '/dashboard' %>">
             <span class="item-icon">⊞</span> Dashboard
           </a>
-          <a class="profile-menu-item" href="/settings">
-            <span class="item-icon">⚙</span> Clinic Settings
-          </a>
-          <a class="profile-menu-item" href="/audit">
-            <span class="item-icon">🛡</span> Audit Trail &amp; Provenance
-          </a>
-          <a class="profile-menu-item" href="/auth/google?next=%2Fdashboard">
+          <% if (currentUser.role === 'DOCTOR' || currentUser.role === 'ADMIN') { %>
+            <a class="profile-menu-item" href="/settings">
+              <span class="item-icon">⚙</span> Clinic Settings
+            </a>
+            <a class="profile-menu-item" href="/audit">
+              <span class="item-icon">🛡</span> Audit Trail &amp; Provenance
+            </a>
+          <% } %>
+          <a class="profile-menu-item" href="/login">
             <span class="item-icon">⇄</span> Switch Clinician
           </a>
           <div class="profile-menu-divider"></div>
@@ -107,7 +109,7 @@
       </div>
     <% } else { %>
       <div class="navbar-auth-actions">
-        <a class="btn-navbar-signin" href="/auth/google?next=%2Fdashboard">
+        <a class="btn-navbar-signin" href="/login">
           <span class="signin-full-text">Clinician Sign In</span>
           <span class="signin-short-text">Sign In</span>
           <span class="signin-arrow">→</span>

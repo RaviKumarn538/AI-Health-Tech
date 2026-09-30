@@ -1,0 +1,68 @@
+<% layout('/layouts/boilerplate') -%>
+
+<div class="upload-page-container clinical-handoff-page">
+  <header class="page-title-block">
+    <div class="title-breadcrumbs">
+      <a href="/patients/<%= patient._id %>">Patient profile</a>
+      <span class="sep">/</span>
+      <span class="current">Clinical handoff</span>
+    </div>
+    <h1 class="page-heading">Clinical handoff for <%= patient.fullName %></h1>
+    <p class="page-lead">A source-backed documentation summary for review before anything is shared.</p>
+  </header>
+
+  <div class="upload-workspace-card handoff-card">
+    <div class="handoff-header-row">
+      <div>
+        <span class="exception-review-kicker">DEUS · source-backed handoff</span>
+        <h2 class="card-heading"><%= patient.fullName %> · <%= patient.mrn %></h2>
+        <p class="card-sub">The summary uses clinician-approved records only. It does not create diagnoses or treatment recommendations.</p>
+      </div>
+      <% if (handoff) { %><span class="badge <%= handoff.status === 'DRAFT' ? 'badge-amber' : 'badge-success' %>"><%= handoff.status %></span><% } %>
+    </div>
+
+    <% if (!handoff) { %>
+      <form method="post" action="/patients/<%= patient._id %>/handoff" class="handoff-form">
+        <label class="form-label" for="handoffReason">Reason for referral / handoff <span class="text-muted">(optional)</span></label>
+        <textarea id="handoffReason" name="reason" class="form-textarea" rows="3" placeholder="Use only documented context, for example: specialist review requested for documented follow-up."></textarea>
+        <div class="upload-submit-row">
+          <a href="/patients/<%= patient._id %>" class="btn btn-outline">Cancel</a>
+          <button type="submit" class="btn btn-primary">Generate Clinical Handoff →</button>
+        </div>
+      </form>
+      <div class="handoff-preview-box">
+        <span class="patient-history-section-label">Preview</span>
+        <pre><%= draftText %></pre>
+      </div>
+    <% } else { %>
+      <div class="handoff-review-notice">
+        <strong><%= handoff.status === 'DRAFT' ? 'Doctor review required before sharing.' : 'This handoff has been approved for sharing.' %></strong>
+        <span>Source documents: <%= handoff.sourceDocuments?.length || 0 %> · Source records: <%= handoff.sourceRecords?.length || 0 %></span>
+      </div>
+      <div class="handoff-preview-box handoff-final-preview">
+        <pre><%= handoff.summary %></pre>
+      </div>
+      <div class="handoff-sources">
+        <div class="exception-review-kicker">SUPPORTING SOURCE RECORDS</div>
+        <% if ((handoff.sourceDocuments || sourceDocuments || []).length) { %>
+          <div class="handoff-source-list">
+            <% (handoff.sourceDocuments || sourceDocuments || []).forEach((source) => { %>
+              <a class="handoff-source-item" href="/documents/<%= source._id %>/file" target="_blank" rel="noopener"><strong><%= source.originalFilename || 'Clinical document' %></strong><span><%= prettyType(source.documentType) %> · <%= formatDate(source.createdAt) %> · View original</span></a>
+            <% }) %>
+          </div>
+        <% } else { %>
+          <p class="text-muted">Not documented in available records.</p>
+        <% } %>
+      </div>
+      <div class="handoff-actions">
+        <% if (handoff.status === 'DRAFT') { %>
+          <form method="post" action="/handoffs/<%= handoff._id %>/approve"><button type="submit" class="btn btn-primary">Approve Handoff</button></form>
+        <% } else { %>
+          <form method="post" action="/handoffs/<%= handoff._id %>/share"><button type="submit" class="btn btn-secondary"><%= handoff.status === 'SHARED' ? 'Update Shared Status' : 'Mark as Shared' %></button></form>
+          <a href="/handoffs/<%= handoff._id %>/export" class="btn btn-outline">Export approved handoff</a>
+        <% } %>
+        <a href="/patients/<%= patient._id %>" class="btn btn-outline">Back to patient</a>
+      </div>
+    <% } %>
+  </div>
+</div>

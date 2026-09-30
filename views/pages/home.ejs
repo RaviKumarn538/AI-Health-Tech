@@ -14,6 +14,7 @@
       <a href="#workflow">How it works</a>
       <a href="#security">Security</a>
       <a href="#team">Team</a>
+      <a href="/patient/login">Patient portal</a>
       <a href="<%= dashboardSignInUrl %>">Sign in</a>
       <a class="nabla-public-cta" href="<%= dashboardSignInUrl %>">Open Workspace <span aria-hidden="true">→</span></a>
     </nav>
@@ -27,6 +28,7 @@
       <a href="#workflow">How it works</a>
       <a href="#security">Security</a>
       <a href="#team">Team</a>
+      <a href="/patient/login">Patient portal</a>
       <a href="<%= dashboardSignInUrl %>">Sign in</a>
       <a class="deus-mobile-nav-cta" href="<%= dashboardSignInUrl %>">Open Workspace <span aria-hidden="true">→</span></a>
     </div>
@@ -41,7 +43,7 @@
     <div class="nabla-hero-stage">
       <video class="nabla-hero-video" autoplay muted loop playsinline preload="none" poster="/images/clinical-hero.svg" aria-label="Clinical AI documentation workflow preview">
         <!-- Load the remote motion only after the first page render; the local poster is immediate. -->
-        <source data-src="https://www-assets.nabla.com/videos/home/nabla.mp4" type="video/mp4">
+        <source data-src="https://media.gettyimages.com/id/2099365133/video/young-female-doctor-using-a-headset-at-work.mp4?s=mp4-640x640-gi&k=20&c=1KxhQ2E5HfGVKu3OoUp2KxJ3MJK_Z0VPcGSzjoc_GgU=" type="video/mp4">
       </video>
       <div class="nabla-hero-video-fallback" aria-hidden="true"></div>
       <div class="nabla-hero-scrim" aria-hidden="true"></div>
@@ -768,7 +770,7 @@
 </footer>
 
 <!-- Interactive Tab Switcher Script -->
-<script>
+<script nonce="<%= cspNonce %>">
   document.addEventListener('DOMContentLoaded', () => {
     const heroVideo = document.querySelector('.nabla-hero-video');
     const heroVideoSource = heroVideo?.querySelector('source[data-src]');
